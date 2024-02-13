@@ -392,7 +392,7 @@ pub fn usage(argv: []u8) !void {
     const stdout = std.io.getStdOut().writer();
 
     try stdout.print(
-        \\Backup Operator to Domain Admin (by @ArchiMoebius)
+        \\Backup Operator to Domain Admin
         \\
         \\  This tool exist thanks to https://github.com/Wh04m1001 && https://github.com/mpgn
         \\
