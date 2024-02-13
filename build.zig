@@ -22,7 +22,7 @@ pub fn package(b: *std.Build, exe: *std.build.Step.Compile, t: std.zig.CrossTarg
 pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
-    var zigwin32 = b.createModule(.{
+    const zigwin32 = b.createModule(.{
         .source_file = .{ .path = "zigwin32/win32.zig" },
     });
     var deps: [1]std.build.ModuleDependency = undefined;
