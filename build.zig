@@ -29,9 +29,20 @@ pub fn build(b: *std.Build) !void {
     deps[0] = std.build.ModuleDependency{ .name = "zigwin32", .module = zigwin32 };
 
     for (targets) |t| {
-        const exe = b.addExecutable(.{
+        var exe = b.addExecutable(.{
             .name = "BackupOperatorToDA",
             .root_source_file = .{ .path = "BackupOperatorToDA.zig" },
+            .target = t,
+            .optimize = optimize,
+        });
+
+        exe.addModule("win32", zigwin32);
+
+        try package(b, exe, t);
+
+        exe = b.addExecutable(.{
+            .name = "high2system",
+            .root_source_file = .{ .path = "high2system.zig" },
             .target = t,
             .optimize = optimize,
         });
