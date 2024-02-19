@@ -176,6 +176,7 @@ const Action = struct {
             return false;
         }
 
+        // TODO: fix segfault if lpApplicationName is not found on the system
         const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.command) catch undefined;
         defer self.allocator.free(lpApplicationName);
 

