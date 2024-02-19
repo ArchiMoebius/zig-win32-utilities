@@ -1,15 +1,27 @@
-# BackupOperatorToDA
+# A small set of utilities ported to Ziglang (for fun and no profit)
 
-Ported to Ziglang for fun and no profit (all the old + an attempt to enable privs.).
+## Contents
 
-## Get and Build the Thing
+### BackupOperatorToDomainAdministrator.zig
+
+As the name implies - with the right group / privileges - "there be dragons".
+
+### ModifyPrivilege.zig
+
+Modify a processes privileges (enable/disable/remove)
+
+### HighToSystem.zig
+
+Provided a process in a 'high' context - leverage that to obtain `SYSTEM`.
+
+## Get and Build
 
 ```bash
-git clone git@github.com:ArchiMoebius/BackupOperatorToDA.git --recurse-submodules
+git clone git@github.com:ArchiMoebius/zig-win32-utilities.git --recurse-submodules
 
 # - OR -
 
-git clone https://github.com/ArchiMoebius/BackupOperatorToDA.git --recurse-submodules
+git clone https://github.com/ArchiMoebius/zig-win32-utilities.git --recurse-submodules
 ```
 
 ### Setup Zig
@@ -32,7 +44,18 @@ Visit [Zig](https://ziglang.org/download/) and download / extract the most recen
 
 ### Build
 
+Creates those `*.exe` files.
+
 ```bash
 make
+tree zig-out
+```
+
+### Development
+
+Creates those `*.exe` and `*.pdb` files.
+
+```bash
+make debug
 tree zig-out
 ```
