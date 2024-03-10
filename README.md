@@ -14,6 +14,10 @@ Modify a processes privileges (enable/disable/remove)
 
 Provided a process in a 'high' context - leverage that to obtain `SYSTEM`.
 
+### Shellcode
+
+An example of shellcode execution on both Windows and Linux (i.e. msfvenom payload).
+
 ## Get and Build
 
 ```bash
