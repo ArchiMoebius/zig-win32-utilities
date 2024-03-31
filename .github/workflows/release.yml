@@ -16,7 +16,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
 
       - name: Generate a Changelog
         uses: orhun/git-cliff-action@v3
@@ -59,7 +58,7 @@ jobs:
       - name: Prepare release assets
         shell: bash
         run: |
-          cp {LICENSE,README.md,CHANGELOG.md} zig-out/
+          cp {LICENSE,README.md,CHANGELOG.md} zig-out/ || echo ""
           find zig-out -name '*shellcode*' -delete
           mv zig-out zig-win32-utilities-${{ env.RELEASE_VERSION }}/
 
