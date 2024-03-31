@@ -26,8 +26,8 @@ pub fn build(b: *std.Build) !void {
         "ModifyPrivilege_windows.zig",
         "HighToSystem_windows.zig",
         "BackupOperatorToDomainAdministrator_windows.zig",
+        "Shortcut_windows.zig",
         "shellcode_windows.zig",
-        "shortcut_windows.zig",
         "shellcode_linux.zig",
     };
 

@@ -1,0 +1,143 @@
+name: Continuous Deployment
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    outputs:
+      release_body: ${{ steps.git-cliff.outputs.content }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Generate a Changelog
+        uses: orhun/git-cliff-action@v2
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+
+  publish-binaries:
+    name: Publish Binaries
+    needs: changelog
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Set the release version
+        run: echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+
+      - name: Show Zig version
+        run: |
+          zig version
+          zig env
+
+      - name: Build
+        run: |
+          bash ./patch_zigwin32.sh
+          zig build -Doptimize=ReleaseSmall
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          cp {LICENSE,README.md,CHANGELOG.md} zig-out/
+          find zig-out -name '*shellcode*' -delete
+          mv zig-out zig-win32-utilities-${{ env.RELEASE_VERSION }}/
+
+      - name: Create release artifacts
+        shell: bash
+        run: |
+          if [[ "${{ matrix.TARGET }}" = *"windows" ]]; then
+            7z a -tzip zig-win32-utilities-${{ env.RELEASE_VERSION }}-${{ matrix.TARGET }}.zip \
+              zig-win32-utilities-${{ env.RELEASE_VERSION }}/
+          else
+            tar -czvf zig-win32-utilities-${{ env.RELEASE_VERSION }}-${{ matrix.TARGET }}.tar.gz \
+              zig-win32-utilities-${{ env.RELEASE_VERSION }}/
+            shasum -a 512 zig-win32-utilities-${{ env.RELEASE_VERSION }}-${{ matrix.TARGET }}.tar.gz \
+              > zig-win32-utilities-${{ env.RELEASE_VERSION }}-${{ matrix.TARGET }}.tar.gz.sha512
+          fi
+
+      # - name: Sign the release
+      #   shell: bash
+      #   run: |
+      #     if [[ "${{ matrix.TARGET }}" != *"windows" ]]; then
+      #       echo "${{ secrets.GPG_RELEASE_KEY }}" | base64 --decode > private.key
+      #       echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --pinentry-mode=loopback \
+      #         --passphrase-fd 0 --import private.key
+      #       echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --pinentry-mode=loopback \
+      #         --passphrase-fd 0 --detach-sign \
+      #         zig-win32-utilities-${{ env.RELEASE_VERSION }}-${{ matrix.TARGET }}.tar.gz
+      #     fi
+
+      - name: Upload the binary releases
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: zig-win32-utilities-${{ env.RELEASE_VERSION }}-${{ matrix.TARGET }}*
+          file_glob: true
+          overwrite: true
+          tag: ${{ github.ref }}
+          release_name: "Release v${{ env.RELEASE_VERSION }}"
+          body: ${{ needs.changelog.outputs.release_body }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+
+  # publish-source:
+  #   name: Publish the source code
+  #   needs: changelog
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout the repository
+  #       uses: actions/checkout@v3
+  #       with:
+  #         fetch-depth: 0
+  #         submodules: recursive
+
+  #     - name: Set the release version
+  #       run: echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
+
+  #     - name: Prepare source code
+  #       run: |
+  #         cd ..
+  #         zip -r v${{ env.RELEASE_VERSION }}.zip ${{ github.event.repository.name }}
+  #         tar -czvf v${{ env.RELEASE_VERSION }}.tar.gz ${{ github.event.repository.name }}
+  #         mv v${{ env.RELEASE_VERSION }}* ${{ github.event.repository.name }}
+
+  #     - name: Sign
+  #       shell: bash
+  #       run: |
+  #         echo "${{ secrets.GPG_RELEASE_KEY }}" | base64 --decode > private.key
+  #         echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --pinentry-mode=loopback \
+  #           --passphrase-fd 0 --import private.key
+  #         for ext in 'zip' 'tar.gz'; do
+  #           echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --pinentry-mode=loopback \
+  #             --passphrase-fd 0 --detach-sign \
+  #             "v${{ env.RELEASE_VERSION }}.${ext}"
+  #         done
+
+  #     - name: Upload the source code
+  #       uses: svenstaro/upload-release-action@v2
+  #       with:
+  #         file: v${{ env.RELEASE_VERSION }}*
+  #         file_glob: true
+  #         overwrite: true
+  #         tag: ${{ github.ref }}
+  #         release_name: "Release v${{ env.RELEASE_VERSION }}"
+  #         body: ${{ needs.changelog.outputs.release_body }}
+  #         repo_token: ${{ secrets.GITHUB_TOKEN }}
