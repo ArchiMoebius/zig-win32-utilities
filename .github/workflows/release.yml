@@ -13,12 +13,12 @@ jobs:
       release_body: ${{ steps.git-cliff.outputs.content }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Generate a Changelog
-        uses: orhun/git-cliff-action@v2
+        uses: orhun/git-cliff-action@v3
         id: git-cliff
         with:
           config: cliff.toml
@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -104,7 +104,7 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Checkout the repository
-  #       uses: actions/checkout@v3
+  #       uses: actions/checkout@v4
   #       with:
   #         fetch-depth: 0
   #         submodules: recursive
