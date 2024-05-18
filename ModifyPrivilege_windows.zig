@@ -6,6 +6,7 @@ pub const default_level: std.Level = switch (std.builtin.mode) {
 
 const std = @import("std");
 const win32 = @import("win32").everything;
+const win32_security = @import("win32").security;
 
 // https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
 const windows = std.os.windows;
@@ -175,7 +176,7 @@ const Action = struct {
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         if (0 == OpenProcessToken(
             self.hProcess.?, //         [in]  HANDLE  ProcessHandle,
-            win32.MAXIMUM_ALLOWED, //   [in]  DWORD   DesiredAccess,
+            0x02000000, //   [in]  DWORD   DesiredAccess,
             &self.token, //             [out] PHANDLE TokenHandle
         )) {
             std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});

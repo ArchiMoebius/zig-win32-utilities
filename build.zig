@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const targets: []const std.zig.CrossTarget = &.{
     .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .gnu },
@@ -37,6 +38,10 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = .{ .path = "zigwin32/win32.zig" },
     });
 
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer _ = gpa.deinit();
+
     for (targets) |t| {
         for (sources) |source| {
             var file: ?[]const u8 = "";
@@ -59,6 +64,21 @@ pub fn build(b: *std.Build) !void {
                 file = parts.next();
             }
 
+            var mode: ?[]const u8 = "release";
+            const cpu_arch: ?[]const u8 = "x86_64";
+            const abi: ?[]const u8 = switch (t.abi.?) {
+                .msvc => "MSVC",
+                .gnu => "GNU",
+                .musl => "MUSL",
+                else => "UNKNOWN",
+            };
+
+            if (optimize == std.builtin.OptimizeMode.Debug) {
+                mode = "debug";
+            }
+
+            file = std.fmt.allocPrint(allocator, "{s}-{s}-{s}-{s}", .{ file.?, abi.?, cpu_arch.?, mode.? }) catch undefined;
+
             const exe = b.addExecutable(.{
                 .name = file.?,
                 .root_source_file = .{ .path = source },
@@ -69,6 +89,8 @@ pub fn build(b: *std.Build) !void {
                 }),
                 .optimize = optimize,
             });
+
+            allocator.free(file.?);
 
             if (t.os_tag == .windows) {
                 exe.root_module.addImport("win32", zigwin32);

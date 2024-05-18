@@ -52,8 +52,7 @@ jobs:
 
       - name: Build
         run: |
-          bash ./patch_zigwin32.sh
-          zig build -Doptimize=ReleaseSmall
+          zig build -Doptimize=ReleaseSmall --release=small
 
       - name: Prepare release assets
         shell: bash
