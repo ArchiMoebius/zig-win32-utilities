@@ -7,7 +7,7 @@ const targets: []const std.zig.CrossTarget = &.{
     .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl },
 };
 
-pub fn package(b: *std.Build, exe: *std.build.Step.Compile, t: std.zig.CrossTarget) !void {
+pub fn package(b: *std.Build, exe: *std.Build.Step.Compile, t: std.zig.CrossTarget) !void {
     const target_output = b.addInstallArtifact(exe, .{
         .dest_dir = .{
             .override = .{
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const zigwin32 = b.createModule(.{
-        .source_file = .{ .path = "zigwin32/win32.zig" },
+        .root_source_file = .{ .path = "zigwin32/win32.zig" },
     });
 
     for (targets) |t| {
@@ -62,12 +62,16 @@ pub fn build(b: *std.Build) !void {
             const exe = b.addExecutable(.{
                 .name = file.?,
                 .root_source_file = .{ .path = source },
-                .target = t,
+                .target = b.resolveTargetQuery(.{
+                    .abi = t.abi,
+                    .cpu_arch = t.cpu_arch,
+                    .os_tag = t.os_tag, // std.Target.Os.Tag.freestanding,
+                }),
                 .optimize = optimize,
             });
 
             if (t.os_tag == .windows) {
-                exe.addModule("win32", zigwin32);
+                exe.root_module.addImport("win32", zigwin32);
             }
 
             try package(b, exe, t);

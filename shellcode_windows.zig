@@ -14,7 +14,7 @@ pub fn main() !void {
     var bytesWritten: windows.SIZE_T = undefined;
 
     // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualallocex
-    var mem = win32.VirtualAllocEx(
+    const mem = win32.VirtualAllocEx(
         pHandle, //                         [in]           HANDLE hProcess,
         null, //                            [in, optional] LPVOID lpAddress,
         buf.len, //                         [in]           SIZE_T dwSize,

@@ -6,6 +6,7 @@ pub const default_level: std.Level = switch (std.builtin.mode) {
 
 const std = @import("std");
 const win32 = @import("win32").everything;
+const win32_security = @import("win32").security;
 
 const windows = std.os.windows;
 
@@ -14,7 +15,7 @@ const windows = std.os.windows;
 // This exists until zigwin32 is updated to enable bitmasks for DesiredAccess /-:
 extern "advapi32" fn OpenProcessToken(
     ProcessHandle: ?win32.HANDLE,
-    DesiredAccess: u32,
+    DesiredAccess: win32_security.TOKEN_ACCESS_MASK,
     TokenHandle: ?*?win32.HANDLE,
 ) callconv(windows.WINAPI) win32.BOOL;
 
@@ -74,7 +75,7 @@ const Action = struct {
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         if (0 == OpenProcessToken(
             hProcess.?, //                                                [in]  HANDLE  ProcessHandle,
-            @intFromEnum(win32.TOKEN_ACCESS_MASK.ADJUST_PRIVILEGES), //   [in]  DWORD   DesiredAccess,
+            win32_security.TOKEN_ADJUST_PRIVILEGES, //   [in]  DWORD   DesiredAccess,
             &self.sourceProcessToken, //                                  [out] PHANDLE TokenHandle
         )) {
             std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
@@ -138,7 +139,7 @@ const Action = struct {
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         _ = OpenProcessToken(
             processHandle, //               [in]  HANDLE  ProcessHandle,
-            win32.MAXIMUM_ALLOWED, //       [in]  DWORD   DesiredAccess,
+            win32_security.TOKEN_MAXIMUM_ALLOWED, //       [in]  DWORD   DesiredAccess,
             &self.targetProcessToken, //    [out] PHANDLE TokenHandle
         );
         result = @intFromEnum(win32.GetLastError());
@@ -260,7 +261,7 @@ pub fn usage(argv: []u8) !void {
         \\ .\\{s} 123 C:\windows\system32\WindowsPowerShell\v1.0\powershell.exe
     , .{ argv, argv });
 
-    std.os.exit(0);
+    std.posix.exit(0);
 }
 
 pub fn main() !void {
@@ -311,5 +312,5 @@ pub fn main() !void {
 
     std.log.info("[+] Executed {s}", .{action.command});
 
-    std.os.exit(0);
+    std.posix.exit(0);
 }

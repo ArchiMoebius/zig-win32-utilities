@@ -9,12 +9,12 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var code = try allocator.alloc(u8, std.mem.page_size);
+    const code = try allocator.alloc(u8, std.mem.page_size);
     var pcode = std.mem.alignInSlice(code, std.mem.page_size) orelse return;
 
     @memcpy(pcode, buf);
 
-    var p = @as([*]const u8, @ptrCast(pcode));
+    const p = @as([*]const u8, @ptrCast(pcode));
 
     if (0 != std.os.linux.mprotect(p, std.mem.page_size, 7)) { // RWX
         return;

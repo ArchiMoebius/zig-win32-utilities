@@ -310,7 +310,7 @@ pub fn usage(argv: []u8) !void {
     }
     try stdout.print("\n", .{});
 
-    std.os.exit(0);
+    std.posix.exit(0);
 }
 
 pub fn main() !void {
@@ -334,7 +334,7 @@ pub fn main() !void {
     for (args) |arg| {
         if (std.mem.containsAtLeast(u8, arg, 1, "-h") or std.mem.containsAtLeast(u8, arg, 1, "-H")) {
             try usage(args[0]);
-            std.os.exit(0);
+            std.posix.exit(0);
         }
 
         if (std.mem.containsAtLeast(u8, arg, 1, "-d") or std.mem.containsAtLeast(u8, arg, 1, "-D")) {
@@ -367,5 +367,5 @@ pub fn main() !void {
 
     std.log.info("[+] Done", .{});
 
-    std.os.exit(0);
+    std.posix.exit(0);
 }

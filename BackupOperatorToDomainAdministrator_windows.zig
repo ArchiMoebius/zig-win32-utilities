@@ -1,4 +1,5 @@
 const win32 = @import("win32").everything;
+const win32_security = @import("win32").security;
 const std = @import("std");
 
 // set log level by build type
@@ -132,11 +133,13 @@ const Target = struct {
         if (token == undefined or token.? == win32.INVALID_HANDLE_VALUE) {
             // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentprocess
             const hProcess: ?win32.HANDLE = win32.GetCurrentProcess();
+            const ap: u32 = @bitCast(win32_security.TOKEN_ADJUST_PRIVILEGES);
+            const q: u32 = @bitCast(win32_security.TOKEN_QUERY);
 
             // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
             if (0 == OpenProcessToken(
                 hProcess.?, //                                                                                              [in]  HANDLE  ProcessHandle,
-                @intFromEnum(win32.TOKEN_ACCESS_MASK.ADJUST_PRIVILEGES) | @intFromEnum(win32.TOKEN_ACCESS_MASK.QUERY), //   [in]  DWORD   DesiredAccess,
+                ap | q, //   [in]  DWORD   DesiredAccess,
                 &token, //                                                                                                  [out] PHANDLE TokenHandle
             )) {
                 std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{GetLastError()});
@@ -403,7 +406,7 @@ pub fn usage(argv: []u8) !void {
         \\ .\\{s} domain/username:password@ip fqdn\\share F
     , .{argv});
 
-    std.os.exit(0);
+    std.posix.exit(0);
 }
 
 pub fn main() !void {
@@ -465,5 +468,5 @@ pub fn main() !void {
 
     std.log.info("[+] Exported!", .{});
 
-    std.os.exit(0);
+    std.posix.exit(0);
 }
