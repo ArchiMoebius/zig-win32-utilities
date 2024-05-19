@@ -24,8 +24,8 @@ pub fn package(b: *std.Build, exe: *std.Build.Step.Compile, t: std.zig.CrossTarg
 
 pub fn build(b: *std.Build) !void {
     const sources = [_][]const u8{
-        "RunAsTrustedInstaller_windows.zig",
         "ModifyPrivilege_windows.zig",
+        "HighToTrustedInstaller_windows.zig",
         "HighToSystem_windows.zig",
         "BackupOperatorToDomainAdministrator_windows.zig",
         "Shortcut_windows.zig",
