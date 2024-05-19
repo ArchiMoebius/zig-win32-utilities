@@ -179,7 +179,7 @@ const Action = struct {
 
         // TODO: fix segfault if lpApplicationName is not found on the system
         const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.command) catch undefined;
-        defer self.allocator.free(lpApplicationName);
+        errdefer self.allocator.free(lpApplicationName);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw
         if (0 == win32.CreateProcessWithTokenW(
@@ -194,6 +194,7 @@ const Action = struct {
             &processInformation, //             [out]               LPPROCESS_INFORMATION lpProcessInformation
         )) {
             std.log.err("[!] Failed CreateProcessWithTokenW :: {s} error code ({d})", .{ self.command, @intFromEnum(win32.GetLastError()) });
+            defer self.allocator.free(lpApplicationName);
             return false;
         }
 
@@ -219,7 +220,7 @@ const Action = struct {
     }
 
     pub fn parseCommand(self: *Self, line: []u8) !void {
-        self.command = std.fmt.allocPrintZ(self.allocator, "{s}", .{line}) catch undefined;
+        self.command = std.fmt.allocPrint(self.allocator, "{s}", .{line}) catch undefined;
     }
 
     pub fn deinit(self: *Self) void {
@@ -273,7 +274,7 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    if (args.len != 3) {
+    if (args.len < 2) {
         try usage(args[0]);
     }
 
@@ -294,7 +295,15 @@ pub fn main() !void {
         i += 1;
     }
 
-    std.log.info("[+] lpApplicationName exists!", .{});
+    if (action.command.len <= 0) {
+        action.command = std.fmt.allocPrint(action.allocator, "{s}", .{"C:\\windows\\system32\\cmd.exe"}) catch undefined;
+    }
+
+    const file = std.fs.openFileAbsolute(action.command, .{}) catch {
+        std.log.err("[!] Failed to open {s}\n", .{action.command});
+        return;
+    };
+    file.close();
 
     action.debug();
 

