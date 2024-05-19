@@ -74,9 +74,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         if (0 == OpenProcessToken(
-            hProcess.?, //                                                [in]  HANDLE  ProcessHandle,
+            hProcess.?, //                               [in]  HANDLE  ProcessHandle,
             win32_security.TOKEN_ADJUST_PRIVILEGES, //   [in]  DWORD   DesiredAccess,
-            &self.sourceProcessToken, //                                  [out] PHANDLE TokenHandle
+            &self.sourceProcessToken, //                 [out] PHANDLE TokenHandle
         )) {
             std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return false;
@@ -138,9 +138,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         _ = OpenProcessToken(
-            processHandle, //               [in]  HANDLE  ProcessHandle,
-            win32_security.TOKEN_MAXIMUM_ALLOWED, //       [in]  DWORD   DesiredAccess,
-            &self.targetProcessToken, //    [out] PHANDLE TokenHandle
+            processHandle, //                           [in]  HANDLE  ProcessHandle,
+            win32_security.TOKEN_MAXIMUM_ALLOWED, //    [in]  DWORD   DesiredAccess,
+            &self.targetProcessToken, //                [out] PHANDLE TokenHandle
         );
         result = @intFromEnum(win32.GetLastError());
 

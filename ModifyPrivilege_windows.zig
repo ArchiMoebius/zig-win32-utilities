@@ -54,7 +54,7 @@ const PRIVILEGES = [_][]const u8{
 // This exists until zigwin32 is updated to enable bitmasks for DesiredAccess /-:
 extern "advapi32" fn OpenProcessToken(
     ProcessHandle: ?win32.HANDLE,
-    DesiredAccess: u32,
+    DesiredAccess: win32_security.TOKEN_ACCESS_MASK,
     TokenHandle: ?*?win32.HANDLE,
 ) callconv(windows.WINAPI) win32.BOOL;
 
@@ -175,9 +175,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         if (0 == OpenProcessToken(
-            self.hProcess.?, //         [in]  HANDLE  ProcessHandle,
-            0x02000000, //   [in]  DWORD   DesiredAccess,
-            &self.token, //             [out] PHANDLE TokenHandle
+            self.hProcess.?, //                         [in]  HANDLE  ProcessHandle,
+            win32_security.TOKEN_MAXIMUM_ALLOWED, //    [in]  DWORD   DesiredAccess,
+            &self.token, //                             [out] PHANDLE TokenHandle
         )) {
             std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return false;
