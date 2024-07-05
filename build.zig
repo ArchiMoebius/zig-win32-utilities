@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 const targets: []const std.zig.CrossTarget = &.{
     .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .gnu },
-    .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .msvc },
+    // .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .msvc },
     .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu },
     .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl },
 };
@@ -28,6 +28,7 @@ pub fn build(b: *std.Build) !void {
         "HighToTrustedInstaller_windows.zig",
         "HighToSystem_windows.zig",
         "BackupOperatorToDomainAdministrator_windows.zig",
+        "AddUser_windows_shared.zig",
         "Shortcut_windows.zig",
         "shellcode_windows.zig",
         "shellcode_linux.zig",
@@ -36,7 +37,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const zigwin32 = b.createModule(.{
-        .root_source_file = .{ .path = "zigwin32/win32.zig" },
+        .root_source_file = .{ .src_path = .{ .owner = b, .sub_path = "zigwin32/win32.zig" } },
     });
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -80,24 +81,46 @@ pub fn build(b: *std.Build) !void {
 
             file = std.fmt.allocPrint(allocator, "{s}-{s}-{s}-{s}", .{ file.?, abi.?, cpu_arch.?, mode.? }) catch undefined;
 
-            const exe = b.addExecutable(.{
-                .name = file.?,
-                .root_source_file = .{ .path = source },
-                .target = b.resolveTargetQuery(.{
-                    .abi = t.abi,
-                    .cpu_arch = t.cpu_arch,
-                    .os_tag = t.os_tag, // std.Target.Os.Tag.freestanding,
-                }),
-                .optimize = optimize,
-            });
+            if (std.mem.containsAtLeast(u8, source, 1, "_shared")) {
+                const dll = b.addSharedLibrary(.{
+                    .name = file.?,
+                    .root_source_file = b.path(source),
+                    .target = b.resolveTargetQuery(.{
+                        .abi = t.abi,
+                        .cpu_arch = t.cpu_arch,
+                        .os_tag = t.os_tag, // std.Target.Os.Tag.freestanding,
+                    }),
+                    .optimize = optimize,
+                });
 
-            allocator.free(file.?);
+                if (t.os_tag == .windows) {
+                    dll.subsystem = .Console;
+                    dll.root_module.addImport("win32", zigwin32);
+                    dll.linkLibC();
+                }
 
-            if (t.os_tag == .windows) {
-                exe.root_module.addImport("win32", zigwin32);
+                try package(b, dll, t);
+            } else {
+                const exe = b.addExecutable(.{
+                    .name = file.?,
+                    .root_source_file = b.path(source),
+                    .target = b.resolveTargetQuery(.{
+                        .abi = t.abi,
+                        .cpu_arch = t.cpu_arch,
+                        .os_tag = t.os_tag, // std.Target.Os.Tag.freestanding,
+                    }),
+                    .optimize = optimize,
+                });
+
+                if (t.os_tag == .windows) {
+                    exe.subsystem = .Console;
+                    exe.root_module.addImport("win32", zigwin32);
+                }
+
+                try package(b, exe, t);
             }
 
-            try package(b, exe, t);
+            allocator.free(file.?);
         }
     }
 }
