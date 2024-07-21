@@ -62,14 +62,14 @@ const Action = struct {
             }
         }
         // https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nf-unknwn-iunknown-release
-        defer _ = win32.IUnknown.IUnknown_Release(@ptrCast(ppv));
+        defer _ = win32.IUnknown.Release(@ptrCast(ppv));
 
         {
             const pszDir = try std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.workingDirectory);
             defer self.allocator.free(pszDir);
 
             // https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinka-setworkingdirectory
-            const status = ppv.IShellLinkW_SetWorkingDirectory(
+            const status = ppv.SetWorkingDirectory(
                 pszDir, // [in] LPCSTR pszDir
             );
             if (win32.FAILED(status)) {
@@ -83,7 +83,7 @@ const Action = struct {
             defer self.allocator.free(pszFile);
 
             // https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinka-setpath
-            const status = ppv.IShellLinkW_SetPath(
+            const status = ppv.SetPath(
                 pszFile, // [in] LPCSTR pszFile
             );
             if (win32.FAILED(status)) {
@@ -98,7 +98,7 @@ const Action = struct {
                 defer self.allocator.free(pszArgs);
 
                 // https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinka-setpath
-                const status = ppv.IShellLinkW_SetArguments(
+                const status = ppv.SetArguments(
                     pszArgs, // [in] LPCWSTR pszArgs
                 );
                 if (win32.FAILED(status)) {
@@ -113,7 +113,7 @@ const Action = struct {
         var ppvObject: *win32.IPersistFile = undefined;
         {
             // https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nf-unknwn-iunknown-queryinterface(refiid_void)
-            const status = win32.IUnknown.IUnknown_QueryInterface(
+            const status = win32.IUnknown.QueryInterface(
                 @ptrCast(ppv),
                 win32.IID_IPersistFile, //  [in] REFIID riid,
                 @ptrCast(&ppvObject), //    [in] void   **ppvObject
@@ -124,14 +124,14 @@ const Action = struct {
             }
         }
         // https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nf-unknwn-iunknown-release
-        defer _ = win32.IUnknown.IUnknown_Release(@ptrCast(ppvObject));
+        defer _ = win32.IUnknown.Release(@ptrCast(ppvObject));
 
         {
             const destination = try std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.destination);
             defer self.allocator.free(destination);
 
             // https://learn.microsoft.com/en-us/windows/win32/api/objidl/nf-objidl-ipersistfile-save
-            const status = ppvObject.IPersistFile_Save(
+            const status = ppvObject.Save(
                 destination, // [in] LPCOLESTR pszFileName,
                 1, //           [in] BOOL      fRemember
             );

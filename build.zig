@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 const targets: []const std.zig.CrossTarget = &.{
     .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .gnu },
-    // .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .msvc },
+    .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .msvc },
     .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu },
     .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl },
 };
@@ -28,8 +28,10 @@ pub fn build(b: *std.Build) !void {
         "BackupOperatorToDomainAdministrator_windows.zig",
         "HighToSystem_windows.zig",
         "HighToTrustedInstaller_windows.zig",
+        "Minidump_windows.zig",
         "ModifyPrivilege_windows.zig",
         "NTRights_windows.zig",
+        "RelabelAbuse_windows.zig",
         "shellcode_windows.zig",
         "Shortcut_windows.zig",
 
@@ -98,7 +100,6 @@ pub fn build(b: *std.Build) !void {
                 if (t.os_tag == .windows) {
                     dll.subsystem = .Console;
                     dll.root_module.addImport("win32", zigwin32);
-                    dll.linkLibC();
                 }
 
                 try package(b, dll, t);

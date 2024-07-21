@@ -4,9 +4,9 @@ all:
 	zig build -Doptimize=ReleaseSmall --release=small
 
 debug:
-	zig build -Doptimize=Debug
+	zig build -freference-trace -Doptimize=Debug
 
 clean:
-	rm -rf zig-out zig-cache
+	rm -rf zig-out zig-cache .zig-cache
 
 .phony: clean

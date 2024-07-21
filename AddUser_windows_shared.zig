@@ -81,7 +81,7 @@ fn exec() i32 {
     return windows.TRUE;
 }
 
-pub export fn _DllMainCRTStartup(hinstDLL: win32.HINSTANCE, fdwReason: u32, lpReserved: *void) win32.BOOL {
+pub export fn DllMain(hinstDLL: win32.HINSTANCE, fdwReason: u32, lpReserved: windows.LPVOID) win32.BOOL {
     _ = lpReserved;
     _ = hinstDLL;
     switch (fdwReason) {
@@ -96,8 +96,3 @@ pub export fn _DllMainCRTStartup(hinstDLL: win32.HINSTANCE, fdwReason: u32, lpRe
 
     return windows.TRUE;
 }
-
-// TODO: expose as binary as well?
-// pub export fn WinMainCRTStartup() callconv(@import("std").os.windows.WINAPI) win32.BOOL {
-//     return exec();
-// }
