@@ -50,7 +50,7 @@ const Action = struct {
     }
 
     fn takeProcessOwnership(pid: u32, puSid: []u64) !void {
-        std.log.debug(("takeProcessOwnership: OpenProcess({d})"), .{pid});
+        std.log.debug(("[+] takeProcessOwnership: OpenProcess({d})"), .{pid});
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         const hProc: ?win32.HANDLE = win32.OpenProcess(
@@ -95,6 +95,8 @@ const Action = struct {
             return Error.AccountNotFound;
         }
 
+        std.log.debug(("[+] takeProcessOwnership: SetSecurityInfo({d})"), .{pid});
+
         utility.closeHandle(hProc);
     }
 
@@ -105,8 +107,6 @@ const Action = struct {
 
         var da: u32 = @bitCast(win32.PROCESS_WRITE_DAC);
         da |= @bitCast(win32.PROCESS_READ_CONTROL);
-
-        std.log.debug("About to openProcess ", .{});
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         const hProcess = win32.OpenProcess(
@@ -121,14 +121,14 @@ const Action = struct {
             return Error.AccountNotFound;
         }
 
+        std.log.debug(("[+] grantProcessFullControl: OpenProcess({d})"), .{pid});
+
         const result = @intFromEnum(win32.GetLastError());
 
         if (result != 0) {
             std.log.err("[!] Failed OpenProcess :: error code ({d})", .{result});
             return Error.AccountNotFound;
         }
-
-        std.log.debug("About to GetSecurityInfo ", .{});
 
         // https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getsecurityinfo
         const dwRes = win32.GetSecurityInfo(
@@ -147,7 +147,7 @@ const Action = struct {
             return Error.AccountNotFound;
         }
 
-        std.log.debug("About to setup eastruct ", .{});
+        std.log.debug(("[+] grantProcessFullControl: GetSecurityInfo({d})"), .{pid});
 
         const pSid: ?*win32.PSID = @ptrCast(@constCast(&puSid));
         // var sida: ?win32.PSTR = null;
@@ -166,8 +166,6 @@ const Action = struct {
         ea.?.Trustee.TrusteeType = win32.TRUSTEE_IS_USER;
         ea.?.Trustee.ptstrName = @alignCast(@ptrCast(pSid.?.*));
 
-        std.log.debug("About to SetEntriesInAclW ", .{});
-
         // https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setentriesinaclw
         var ret = win32.SetEntriesInAclW(
             1,
@@ -181,7 +179,7 @@ const Action = struct {
             return Error.AccountNotFound;
         }
 
-        std.log.debug("About to SetSecurityInfo ", .{});
+        std.log.debug(("[+] grantProcessFullControl: SetEntriesInAclW({d})"), .{pid});
 
         // https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setsecurityinfo
         ret = win32.SetSecurityInfo(
@@ -198,6 +196,8 @@ const Action = struct {
             std.log.err("[!] Failed SetSecurityInfo :: error code ({any})", .{ret});
             return Error.AccountNotFound;
         }
+
+        std.log.debug(("[+] grantProcessFullControl: SetSecurityInfo({d})"), .{pid});
     }
 
     pub fn attemptRelabel(self: *Self) !void {
@@ -230,7 +230,7 @@ const Action = struct {
             return Action.Error.NoMemory;
         };
 
-        std.log.debug("TakeProcessOwnership: Successfully took ownership of the process {d} handle.\n", .{self.targetPID});
+        std.log.debug("TakeProcessOwnership: Successfully took ownership of the process {d}\n", .{self.targetPID});
 
         ppSid = try utility.getProcessOwnerSID(self.allocator, self.sourceProcessToken);
 
@@ -240,11 +240,11 @@ const Action = struct {
         }
 
         grantProcessFullControl(self.allocator, self.targetPID, ppSid.*.?) catch |err| {
-            std.log.err("Failed grantProcessFullControl {any}\n", .{err});
+            std.log.err("attemptRelabel: Failed grantProcessFullControl {any}\n", .{err});
             return Action.Error.NoMemory;
         };
 
-        std.log.debug("GrantProcessFullControl: Successfully took ownership of the process {d} handle.\n", .{self.targetPID});
+        std.log.debug("Successfully took full control of the process {d}\n", .{self.targetPID});
     }
 
     pub fn spawnProcessFromPID(self: *Self) !void {
@@ -294,7 +294,7 @@ const Action = struct {
         defer _ = win32.HeapFree(hHeap, win32.HEAP_NONE, startupInfo.lpAttributeList);
 
         if (startupInfo.lpAttributeList == null) {
-            std.log.err("Unable to allocate si.lpAttributeList", .{});
+            std.log.err("spawnProcessFromPID: Unable to allocate si.lpAttributeList", .{});
             return Error.AccountNotFound;
         }
 
@@ -404,16 +404,13 @@ pub fn usage(argv: []u8) !void {
         \\
         \\Example:
         \\
-        \\ Attempt to enable the privileges SeShutdown & SeTimeZone for the user 'pete':
-        \\ .\\{s} pete 1969
-        \\
-        \\ Attempt to disable the privileges SeShutdown & SeTimeZone for the user 'pete':
+        \\ Attempt to take ownership of PID for the user 'pete':
         \\ .\\{s} pete 1969
         \\
         \\ Show this menu
         \\ .\\{s} -h
         \\
-    , .{ argv, argv, argv });
+    , .{ argv, argv });
 
     std.posix.exit(0);
 }
