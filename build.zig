@@ -28,6 +28,8 @@ pub fn build(b: *std.Build) !void {
         "BackupOperatorToDomainAdministrator_windows.zig",
         "HighToSystem_windows.zig",
         "HighToTrustedInstaller_windows.zig",
+        "InjectDLL_windows.zig",
+        "InjectMe_windows_shared.zig",
         "Minidump_windows.zig",
         "ModifyPrivilege_windows.zig",
         "NTRights_windows.zig",
