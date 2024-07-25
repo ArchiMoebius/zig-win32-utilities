@@ -140,10 +140,10 @@ const Action = struct {
         // https://msdn.microsoft.com/en-us/library/windows/desktop/aa378299(v=vs.85).aspx
         var objectAttributes: win32.OBJECT_ATTRIBUTES = std.mem.zeroes(win32.OBJECT_ATTRIBUTES);
         const ret = win32.LsaOpenPolicy(
-            null, //                      [in]      PLSA_UNICODE_STRING    SystemName,
-            &objectAttributes, //   [in]      PLSA_OBJECT_ATTRIBUTES ObjectAttributes,
-            POLICY_ALL_ACCESS, //      [in]      ACCESS_MASK            DesiredAccess,
-            @ptrCast(&self.handle), //  [in, out] PLSA_HANDLE            PolicyHandle
+            null,
+            &objectAttributes,
+            POLICY_ALL_ACCESS,
+            @ptrCast(&self.handle),
         );
 
         if (ret != NTSTATUS_SUCCESS) {
@@ -159,12 +159,12 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-lsalookupnames2
         const ret = win32.LsaLookupNames2(
-            self.handle, //                  [in]  LSA_HANDLE                  PolicyHandle,
-            win32.LSA_LOOKUP_ISOLATED_AS_LOCAL, //  [in]  ULONG                       Flags,
-            1, //                                   [in]  ULONG                       Count,
-            &names, //                              [in]  PLSA_UNICODE_STRING         Names,
-            @ptrCast(&rd), //           [out] PLSA_REFERENCED_DOMAIN_LIST *ReferencedDomains,
-            @ptrCast(&sids), //                      [out] PLSA_TRANSLATED_SID2        *Sids
+            self.handle,
+            win32.LSA_LOOKUP_ISOLATED_AS_LOCAL,
+            1,
+            &names,
+            @ptrCast(&rd),
+            @ptrCast(&sids),
         );
 
         // TODO: assume success?
@@ -205,19 +205,19 @@ const Action = struct {
             if (self.enable) {
                 // https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-lsaaddaccountrights
                 ret = win32.LsaAddAccountRights(
-                    self.handle, //   [in] LSA_HANDLE          PolicyHandle,
-                    sids.*.Sid, //      [in] PSID                AccountSid,
-                    @ptrCast(&priv), // [in] PLSA_UNICODE_STRING UserRights,
-                    1, //            [in] ULONG               CountOfRights
+                    self.handle,
+                    sids.*.Sid,
+                    @ptrCast(&priv),
+                    1,
                 );
             } else {
                 // https://learn.microsoft.com/en-us/windows/win32/api/ntsecapi/nf-ntsecapi-lsaremoveaccountrights
                 ret = win32.LsaRemoveAccountRights(
-                    self.handle, //   [in] LSA_HANDLE          PolicyHandle,
-                    sids.*.Sid, //      [in] PSID                AccountSid,
-                    0, //                [in] BOOLEAN             AllRights,
-                    @ptrCast(&priv), // [in] PLSA_UNICODE_STRING UserRights,
-                    1, //            [in] ULONG               CountOfRights
+                    self.handle,
+                    sids.*.Sid,
+                    0,
+                    @ptrCast(&priv),
+                    1,
                 );
             }
 

@@ -54,9 +54,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         hProcess = win32.OpenProcess(
-            win32.PROCESS_QUERY_LIMITED_INFORMATION, // [in] DWORD dwDesiredAccess,
-            windows.TRUE, //                            [in] BOOL  bInheritHandle,
-            pid, //                                     [in] DWORD dwProcessId
+            win32.PROCESS_QUERY_LIMITED_INFORMATION,
+            windows.TRUE,
+            pid,
         );
         defer _ = Action.CloseHandle(hProcess);
         const result = @intFromEnum(win32.GetLastError());
@@ -68,9 +68,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         if (0 == OpenProcessToken(
-            hProcess.?, //                              [in]  HANDLE  ProcessHandle,
-            win32_security.TOKEN_MAXIMUM_ALLOWED, //    [in]  DWORD   DesiredAccess,
-            &sourceProcessToken, //                     [out] PHANDLE TokenHandle
+            hProcess.?,
+            win32_security.TOKEN_MAXIMUM_ALLOWED,
+            &sourceProcessToken,
         )) {
             std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return win32.INVALID_HANDLE_VALUE;
@@ -87,7 +87,7 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-impersonateloggedonuser
         if (0 == win32.ImpersonateLoggedOnUser(
-            sourceProcessToken.?, // [in] HANDLE hToken
+            sourceProcessToken.?,
         )) {
             std.log.err("[!] Failed ImpersonateLoggedOnUser :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return win32.INVALID_HANDLE_VALUE;
@@ -95,12 +95,12 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-duplicatetokenex
         if (0 == DuplicateTokenEx(
-            sourceProcessToken.?, //                [in]           HANDLE                       hExistingToken
-            win32.MAXIMUM_ALLOWED, //               [in]           DWORD                        dwDesiredAccess
-            null, //                                [in, optional] LPSECURITY_ATTRIBUTES        lpTokenAttributes
-            win32.SecurityImpersonation, //         [in]           SECURITY_IMPERSONATION_LEVEL ImpersonationLevel
-            win32.TokenPrimary, //                  [in]           TOKEN_TYPE                   TokenType
-            &duplicateProcessToken, //              [out]          PHANDLE                      phNewToken
+            sourceProcessToken.?,
+            win32.MAXIMUM_ALLOWED,
+            null,
+            win32.SecurityImpersonation,
+            win32.TokenPrimary,
+            &duplicateProcessToken,
         )) {
             std.log.err("[!] Failed DuplicateTokenEx :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return win32.INVALID_HANDLE_VALUE;
@@ -131,9 +131,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluea
         if (0 == win32.LookupPrivilegeValueA(
-            @ptrFromInt(0), //          [in, optional] LPCSTR lpSystemName,
-            lpName, //                  [in]           LPCSTR lpName,
-            &tp.Privileges[0].Luid, //  [out]          PLUID  lpLuid
+            @ptrFromInt(0),
+            lpName,
+            &tp.Privileges[0].Luid,
         )) {
             std.log.err("[!] Failed LookupPrivilegeValueA :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             success = false;
@@ -141,12 +141,12 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
         if (0 == win32.AdjustTokenPrivileges(
-            processToken.?, //                  [in]            HANDLE            TokenHandle,
-            0, //                               [in]            BOOL              DisableAllPrivileges,
-            &tp, //                             [in, optional]  PTOKEN_PRIVILEGES NewState,
-            @sizeOf(win32.TOKEN_PRIVILEGES), // [in]            DWORD             BufferLength,
-            @ptrFromInt(0), //                  [out, optional] PTOKEN_PRIVILEGES PreviousState,
-            @ptrFromInt(0), //                  [out, optional] PDWORD            ReturnLength
+            processToken.?,
+            0,
+            &tp,
+            @sizeOf(win32.TOKEN_PRIVILEGES),
+            @ptrFromInt(0),
+            @ptrFromInt(0),
         )) {
             result = @intFromEnum(win32.GetLastError());
             if (result == @intFromEnum(win32.WIN32_ERROR.ERROR_INVALID_HANDLE)) {
@@ -235,9 +235,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         const processHandle: ?win32.HANDLE = win32.OpenProcess(
-            win32.PROCESS_QUERY_LIMITED_INFORMATION, // [in] DWORD dwDesiredAccess,
-            windows.TRUE, //                            [in] BOOL  bInheritHandle,
-            self.tiPID, //                              [in] DWORD dwProcessId
+            win32.PROCESS_QUERY_LIMITED_INFORMATION,
+            windows.TRUE,
+            self.tiPID,
         );
         defer _ = Action.CloseHandle(processHandle);
 
@@ -261,15 +261,15 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw
         if (0 == win32.CreateProcessWithTokenW(
-            trustedInstallerProcessToken.?, //  [in]                HANDLE                hToken,
-            win32.LOGON_WITH_PROFILE, //        [in]                DWORD                 dwLogonFlags,
-            lpApplicationName, //               [in, optional]      LPCWSTR               lpApplicationName,
-            null, //                            [in, out, optional] LPWSTR                lpCommandLine,
-            0, //                               [in]                DWORD                 dwCreationFlags,
-            null, //                            [in, optional]      LPVOID                lpEnvironment,
-            null, //                            [in, optional]      LPCWSTR               lpCurrentDirectory,
-            &startupInfo, //                    [in]                LPSTARTUPINFOW        lpStartupInfo,
-            &processInformation, //             [out]               LPPROCESS_INFORMATION lpProcessInformation
+            trustedInstallerProcessToken.?,
+            win32.LOGON_WITH_PROFILE,
+            lpApplicationName,
+            null,
+            0,
+            null,
+            null,
+            &startupInfo,
+            &processInformation,
         )) {
             std.log.err("[!] Failed CreateProcessWithTokenW :: {s} error code ({d})", .{ self.command, @intFromEnum(win32.GetLastError()) });
             return false;
@@ -291,8 +291,8 @@ const Action = struct {
 
         //https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-createtoolhelp32snapshot
         const handle = win32.CreateToolhelp32Snapshot(
-            win32.TH32CS_SNAPPROCESS, //    [in] DWORD dwFlags,
-            0, //                           [in] DWORD th32ProcessID
+            win32.TH32CS_SNAPPROCESS,
+            0,
         );
 
         if (handle == win32.INVALID_HANDLE_VALUE) {
@@ -306,8 +306,8 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-process32first
         if (windows.FALSE == win32.Process32First(
-            handle, //  [in]      HANDLE           hSnapshot,
-            &pe32, //   [in, out] LPPROCESSENTRY32 lppe
+            handle,
+            &pe32,
         )) {
             return;
         }
@@ -330,8 +330,8 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-process32next
         while (windows.TRUE == win32.Process32Next(
-            handle, //  [in]      HANDLE           hSnapshot,
-            &pe32, //   [in, out] LPPROCESSENTRY32 lppe
+            handle,
+            &pe32,
         )) {
             if (self.targetPID == 0 and pe32.th32ProcessID == pid) {
                 self.targetPID = pe32.th32ParentProcessID;
@@ -398,7 +398,7 @@ pub fn usage(argv: []u8) !void {
         \\  * SE_DEBUG_PRIVILEGE
         \\
         \\Usage:
-        \\   <PID> <lpApplicationName>
+        \\   <PID> <TI PID> <lpApplicationName>
         \\
         \\Example:
         \\

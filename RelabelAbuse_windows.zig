@@ -110,9 +110,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         const hProcess = win32.OpenProcess(
-            @bitCast(da), // [in] DWORD dwDesiredAccess,
-            0, //                            [in] BOOL  bInheritHandle,
-            pid, //                          [in] DWORD dwProcessId
+            @bitCast(da),
+            0,
+            pid,
         );
         defer _ = utility.closeHandle(hProcess);
 
@@ -132,14 +132,14 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getsecurityinfo
         const dwRes = win32.GetSecurityInfo(
-            hProcess.?, // [in]            HANDLE               handle,
-            win32.SE_KERNEL_OBJECT, // [in]            SE_OBJECT_TYPE       ObjectType,
-            @bitCast(win32.DACL_SECURITY_INFORMATION), // [in]            SECURITY_INFORMATION SecurityInfo,
-            null, // [out, optional] PSID                 *ppsidOwner,
-            null, // [out, optional] PSID                 *ppsidGroup,
-            &pOldDACL, // [out, optional] PACL                 *ppDacl,
-            null, // [out, optional] PACL                 *ppSacl,
-            &pSD, // [out, optional] PSECURITY_DESCRIPTOR *ppSecurityDescriptor
+            hProcess.?,
+            win32.SE_KERNEL_OBJECT,
+            @bitCast(win32.DACL_SECURITY_INFORMATION),
+            null,
+            null,
+            &pOldDACL,
+            null,
+            &pSD,
         );
 
         if (dwRes != win32.ERROR_SUCCESS) {
@@ -250,9 +250,9 @@ const Action = struct {
     pub fn spawnProcessFromPID(self: *Self) !void {
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         const hProc: ?win32.HANDLE = win32.OpenProcess(
-            win32.PROCESS_CREATE_PROCESS, //    [in] DWORD dwDesiredAccess,
-            0, //                               [in] BOOL  bInheritHandle,
-            self.targetPID, //                  [in] DWORD dwProcessId
+            win32.PROCESS_CREATE_PROCESS,
+            0,
+            self.targetPID,
         );
         defer utility.closeHandle(hProc);
 
@@ -404,7 +404,7 @@ pub fn usage(argv: []u8) !void {
         \\
         \\Example:
         \\
-        \\ Attempt to take ownership of PID for the user 'pete':
+        \\ Attempt to set ownership of PID for the user 'pete':
         \\ .\\{s} pete 1969
         \\
         \\ Show this menu

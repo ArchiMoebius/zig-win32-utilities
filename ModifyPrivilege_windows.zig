@@ -108,9 +108,9 @@ const Action = struct {
 
             // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluea
             if (0 == win32.LookupPrivilegeValueA(
-                @ptrFromInt(0), //          [in, optional] LPCSTR lpSystemName,
-                lpName, //                  [in]           LPCSTR lpName,
-                &tp.Privileges[0].Luid, //  [out]          PLUID  lpLuid
+                @ptrFromInt(0),
+                lpName,
+                &tp.Privileges[0].Luid,
             )) {
                 std.log.err("[!] Failed LookupPrivilegeValueA :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
                 continue;
@@ -118,12 +118,12 @@ const Action = struct {
 
             // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-adjusttokenprivileges
             if (0 == win32.AdjustTokenPrivileges(
-                self.token, //                      [in]            HANDLE            TokenHandle,
-                0, //                               [in]            BOOL              DisableAllPrivileges,
-                &tp, //                             [in, optional]  PTOKEN_PRIVILEGES NewState,
-                @sizeOf(win32.TOKEN_PRIVILEGES), // [in]            DWORD             BufferLength,
-                @ptrFromInt(0), //                  [out, optional] PTOKEN_PRIVILEGES PreviousState,
-                @ptrFromInt(0), //                  [out, optional] PDWORD            ReturnLength
+                self.token,
+                0,
+                &tp,
+                @sizeOf(win32.TOKEN_PRIVILEGES),
+                @ptrFromInt(0),
+                @ptrFromInt(0),
             )) {
                 result = @intFromEnum(win32.GetLastError());
                 if (result == @intFromEnum(win32.WIN32_ERROR.ERROR_INVALID_HANDLE)) {
@@ -135,7 +135,7 @@ const Action = struct {
             }
 
             result = @intFromEnum(win32.GetLastError());
-            if (result != 0) { // win32.WIN32_ERROR.ERROR_SUCCESS
+            if (result != 0) {
                 if (result == 1300) { // win32.WIN32_ERROR.ERROR_NOT_ALL_ASSIGNED
                     std.log.err("[!] Failed to modify privilege {s} :: error code ({d})", .{ privilege, result });
                 } else {
@@ -161,9 +161,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         self.hProcess = win32.OpenProcess(
-            win32.PROCESS_QUERY_LIMITED_INFORMATION, // [in] DWORD dwDesiredAccess,
-            windows.TRUE, //                            [in] BOOL  bInheritHandle,
-            self.targetPID, //                          [in] DWORD dwProcessId
+            win32.PROCESS_QUERY_LIMITED_INFORMATION,
+            windows.TRUE,
+            self.targetPID,
         );
         defer _ = Action.CloseHandle(self.hProcess);
         const result = @intFromEnum(win32.GetLastError());
@@ -175,9 +175,9 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         if (0 == OpenProcessToken(
-            self.hProcess.?, //                         [in]  HANDLE  ProcessHandle,
-            win32_security.TOKEN_MAXIMUM_ALLOWED, //    [in]  DWORD   DesiredAccess,
-            &self.token, //                             [out] PHANDLE TokenHandle
+            self.hProcess.?,
+            win32_security.TOKEN_MAXIMUM_ALLOWED,
+            &self.token,
         )) {
             std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return false;
@@ -239,8 +239,8 @@ const Action = struct {
 
         //https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-createtoolhelp32snapshot
         const handle = win32.CreateToolhelp32Snapshot(
-            win32.TH32CS_SNAPPROCESS, //    [in] DWORD dwFlags,
-            0, //                           [in] DWORD th32ProcessID
+            win32.TH32CS_SNAPPROCESS,
+            0,
         );
 
         if (handle == win32.INVALID_HANDLE_VALUE) {
@@ -254,8 +254,8 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-process32first
         if (windows.FALSE == win32.Process32First(
-            handle, //[in]      HANDLE           hSnapshot,
-            &pe32, // [in, out] LPPROCESSENTRY32 lppe
+            handle,
+            &pe32,
         )) {
             return 0;
         }
@@ -266,8 +266,8 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-process32next
         while (windows.TRUE == win32.Process32Next(
-            handle, //[in]      HANDLE           hSnapshot,
-            &pe32, // [in, out] LPPROCESSENTRY32 lppe
+            handle,
+            &pe32,
         )) {
             if (pe32.th32ProcessID == pid) {
                 return pe32.th32ParentProcessID;

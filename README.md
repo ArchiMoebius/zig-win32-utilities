@@ -2,7 +2,11 @@
 
 ## Contents
 
-### BackupOperatorToDomainAdministrator.zig
+### [AddUser](AddUser_windows_shared.zig)
+
+An example of adding a user with a DLL (sideload it).
+
+### [BackupOperatorToDomainAdministrator](BackupOperatorToDomainAdministrator_windows.zig)
 
 As the name implies - with the right group / privileges - "there be dragons".
 
@@ -14,7 +18,27 @@ As the name implies - with the right group / privileges - "there be dragons".
 .\BackupOperatorToDomainAdministrator.exe DOMAIN/user:password@ip \\HOSTNAME\share\
 ```
 
-### ModifyPrivilege.zig
+### [HighToSystem](HighToSystem_windows.zig)
+
+Provided a process in a 'high' context - leverage that to obtain `SYSTEM`.
+
+```
+.\HighToSystem.exe <pid> <fullpath to an executable>
+```
+
+### [HighToTrustedInstaller](HighToTrustedInstaller_windows.zig)
+
+Provided a process in a 'high' context - leverage that to obtain `Trusted Installer`.
+
+```
+.\HighToTrustedInstaller.exe <pid> <TI pid> <fullpath to an executable>
+```
+
+### [Minidump](Minidump_windows.zig)
+
+Call minidump on a PID.
+
+### [ModifyPrivilege](ModifyPrivilege_windows.zig)
 
 Modify a processes privileges (enable/disable/remove)
 
@@ -26,25 +50,33 @@ Modify a processes privileges (enable/disable/remove)
 .\ModifyPrivilege.exe <some pid>
 ```
 
-### HighToSystem.zig
+### [NTRights](NTRights_windows.zig)
 
-Provided a process in a 'high' context - leverage that to obtain `SYSTEM`.
+An open source alternative to ntrights.exe to allow manipulation of LSA policy on windows.
 
-```
-.\HighToSystem.exe <pid> <fullpath to an executable>
-```
+### [PasswordFilter](PasswordFilter_windows_shared.zig)
 
-### Shortcut.zig
+An example password filter (DLL) with [catcher](PasswordFilter_net.py) (if desired)
+
+### [RelabelAbuse](RelabelAbuse_windows.zig)
+
+An example usage for the SeRelabel privilege.
+
+### [SessionExec](SessionExec_windows.zig)
+
+Execute code in other sessions (spawns powershell).
+
+### Shellcode
+
+With a msfvenom payload; example of shellcode execution on both [Windows](shellcode_windows.zig) and [Linux](shellcode_linux.zig).
+
+### [Shortcut](Shortcut_windows.zig)
 
 Provided a quick utility to create shortcuts from the command line.
 
 ```
  .\Shortcut.exe  C:\windows\system32\cmd.exe C:\users\username\desktop\cmd.lnk C:\
 ```
-
-### Shellcode
-
-An example of shellcode execution on both Windows and Linux (i.e. msfvenom payload).
 
 ## Get and Build
 
