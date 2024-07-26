@@ -41,45 +41,50 @@ const Action = struct {
         std.log.debug("GetModuleHandleA", .{});
 
         // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress
-        const lla = win32.GetProcAddress(moduleHandle, "LoadLibraryW\x00");
-
+        const lla = win32.GetProcAddress(moduleHandle, "LoadLibraryA\x00");
         if (lla == null) {
             std.log.err("[!] Failed GetProcAddress :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return Error.UnknownError;
         }
-        std.log.debug("GetProcAddress", .{});
+
+        std.log.debug("GetProcAddress.LoadLibraryA :: {any}", .{lla.?});
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
         const processHandle: ?win32.HANDLE = win32.OpenProcess(
-            win32.PROCESS_ACCESS_RIGHTS{ .CREATE_THREAD = 1, .QUERY_INFORMATION = 1, .VM_READ = 1, .VM_WRITE = 1, .VM_OPERATION = 1 },
+            win32.PROCESS_ACCESS_RIGHTS{
+                .CREATE_THREAD = 1,
+                .QUERY_INFORMATION = 1,
+                .VM_OPERATION = 1,
+                .VM_WRITE = 1,
+                .VM_READ = 1,
+            },
             windows.FALSE,
             self.targetPID,
         );
-        defer utility.closeHandle(processHandle);
 
         if (processHandle == null) {
             std.log.err("[!] Failed OpenProcess :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
             return Error.UnknownError;
         }
+        defer utility.closeHandle(processHandle);
+
         std.log.debug("OpenProcess", .{});
 
-        var fullpath: [win32.MAX_PATH]u16 = std.mem.zeroes([win32.MAX_PATH]u16);
-        const dllPath = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.dll) catch undefined;
-        defer self.allocator.free(dllPath);
+        var fullpath: [win32.MAX_PATH]u8 = std.mem.zeroes([win32.MAX_PATH]u8);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea
-        const len = win32.GetFullPathNameW(
-            @constCast(dllPath.ptr),
+        const len = win32.GetFullPathNameA(
+            self.dll.ptr,
             win32.MAX_PATH,
             @ptrCast(&fullpath),
             null,
         );
 
         if (len == 0) {
-            std.log.err("[!] Error :: GetFullPathNameA({s}) :: {d}", .{ self.dll, @intFromEnum(win32.GetLastError()) });
+            std.log.err("[!] Error :: GetFullPathNameA({u}) :: {d}", .{ self.dll, @intFromEnum(win32.GetLastError()) });
             return Error.UnknownError;
         }
-        std.log.debug("GetFullPathNameW", .{});
+        std.log.debug("GetFullPathNameA :: {u} ({d})", .{ fullpath[0 .. len + 1], len });
 
         // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualallocex
         const mem = win32.VirtualAllocEx(
@@ -94,7 +99,7 @@ const Action = struct {
             std.log.err("[!] Error :: VirtualAllocEx :: {d}", .{@intFromEnum(win32.GetLastError())});
             return Error.UnknownError;
         }
-        std.log.debug("VirtualAllocEx", .{});
+        std.log.debug("VirtualAllocEx :: {any}", .{mem});
         // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfreeex
         defer _ = win32.VirtualFreeEx(
             processHandle,
@@ -109,7 +114,7 @@ const Action = struct {
         if (0 == win32.WriteProcessMemory(
             processHandle,
             mem,
-            @ptrCast(&fullpath),
+            fullpath[0..].ptr,
             len,
             &bytesWritten,
         )) {
@@ -117,7 +122,7 @@ const Action = struct {
             return Error.UnknownError;
         }
 
-        std.log.debug("WriteProcessMemory", .{});
+        std.log.debug("WriteProcessMemory :: {d}/{d}", .{ bytesWritten, len });
 
         var thread_id: u32 = 0;
 
