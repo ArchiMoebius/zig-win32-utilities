@@ -104,7 +104,7 @@ const Action = struct {
         defer _ = win32.VirtualFreeEx(
             processHandle,
             mem,
-            len,
+            0,
             win32.MEM_RELEASE,
         );
 
@@ -150,16 +150,16 @@ const Action = struct {
         const r = win32.WaitForSingleObject(threadHandle, win32.INFINITE);
         std.log.debug("WaitForSingleObject {d}", .{r});
 
-        var exitcode: u32 = 1;
+        var exitcode: u32 = 0;
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getexitcodethread
         if (0 == win32.GetExitCodeThread(threadHandle, &exitcode)) {
             std.log.err("[!] Error :: GetExitCodeThread :: {d}", .{@intFromEnum(win32.GetLastError())});
             return Error.UnknownError;
         }
 
-        std.log.debug("GetExitCodeThread {d}", .{exitcode});
+        std.log.debug("GetExitCodeThread :: {d}", .{exitcode});
 
-        win32.OutputDebugStringA("RAN THING...");
+        // win32.OutputDebugStringA("RAN THING...");
 
         return exitcode;
     }
@@ -234,11 +234,11 @@ pub fn main() !void {
 
     const exitcode = try action.inject();
 
-    if (exitcode == 0) {
-        std.log.info("[+] Success", .{});
+    if (exitcode != 0) {
+        std.log.info("[+] Success {d}", .{exitcode});
+        std.posix.exit(0);
     } else {
-        std.log.info("[+] Failure {d}", .{exitcode});
+        std.log.info("[+] Failure...", .{});
+        std.posix.exit(1);
     }
-
-    std.posix.exit(0);
 }
