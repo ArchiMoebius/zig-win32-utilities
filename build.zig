@@ -34,6 +34,7 @@ pub fn build(b: *std.Build) !void {
         "ModifyPrivilege_windows.zig",
         "NTRights_windows.zig",
         "PasswordFilter_windows_shared.zig",
+        "ReflectDLL_windows.zig",
         "RelabelAbuse_windows.zig",
         "SessionExec_windows.zig",
         "shellcode_windows.zig",
