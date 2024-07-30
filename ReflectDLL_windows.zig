@@ -226,6 +226,57 @@ const Action = struct {
             importDescriptor = @ptrFromInt(dllBaseAddr + imports.VirtualAddress + @sizeOf(win32.IMAGE_IMPORT_DESCRIPTOR) * idx);
         }
 
+        // TODO: Process delayed imports
+
+        // Set memory protections on sections
+        idx = 0;
+        while (idx < NTHeader.FileHeader.NumberOfSections) : (idx += 1) {
+            std.log.debug("Finalizing {s} at 0x{x} // {any}", .{ sections[idx].Name, sections[idx].VirtualAddress, sections[idx].PointerToRawData });
+            var newSectionProtection: win32.PAGE_PROTECTION_FLAGS = win32.PAGE_PROTECTION_FLAGS{};
+
+            const executable = sections[idx].Characteristics.MEM_EXECUTE == 1;
+            const readable = sections[idx].Characteristics.MEM_READ == 1;
+            const writeable = sections[idx].Characteristics.MEM_WRITE == 1;
+
+            if (!executable and !readable and !writeable) {
+                newSectionProtection.PAGE_NOACCESS = 1;
+            } else if (!executable and !readable and writeable) {
+                newSectionProtection.PAGE_WRITECOPY = 1;
+            } else if (!executable and readable and !writeable) {
+                newSectionProtection.PAGE_READONLY = 1;
+            } else if (!executable and readable and writeable) {
+                newSectionProtection.PAGE_READWRITE = 1;
+            } else if (executable and !readable and writeable) {
+                newSectionProtection.PAGE_EXECUTE_WRITECOPY = 1;
+            } else if (executable and readable and !writeable) {
+                newSectionProtection.PAGE_EXECUTE_READ = 1;
+            } else {
+                newSectionProtection.PAGE_EXECUTE_READWRITE = 1;
+            }
+
+            if (sections[idx].Characteristics.MEM_NOT_CACHED == 1) {
+                newSectionProtection.PAGE_NOCACHE = 1;
+            }
+
+            var oldSectionProtection: win32.PAGE_PROTECTION_FLAGS = win32.PAGE_PROTECTION_FLAGS{};
+
+            // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect
+            if (0 == win32.VirtualProtect(
+                @ptrFromInt(dllBaseAddr + sections[idx].VirtualAddress),
+                sections[idx].SizeOfRawData,
+                newSectionProtection,
+                &oldSectionProtection,
+            )) {
+                std.log.err("[-] Failed VirtualProtect({s}) :: {d}", .{ sections[idx].Name, @intFromEnum(win32.GetLastError()) });
+                return Error.UnknownError;
+            }
+        }
+
+        // TODO: TLS callbacks
+        // TODO: Register exception handlers on 64 bit
+
+        _ = win32.FlushInstructionCache(null, null, 0);
+
         const DLLMain: DLLEntry = @ptrFromInt(dllBaseAddr + NTHeader.OptionalHeader.AddressOfEntryPoint);
 
         // execute the loaded DLL
