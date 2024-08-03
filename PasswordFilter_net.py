@@ -1,3 +1,5 @@
+import argparse
+
 from base64 import b64decode
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, test
@@ -45,8 +47,6 @@ class AuthHTTPRequestHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--cgi", action="store_true", help="Run as CGI Server")
     parser.add_argument(

