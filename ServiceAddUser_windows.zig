@@ -39,6 +39,7 @@ pub fn main() !void {
     table[0].lpServiceName = @constCast(@ptrCast(&""));
     table[0].lpServiceProc = svc_main;
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-startservicectrldispatchera
     if (0 == win32.StartServiceCtrlDispatcherA(@ptrCast(&table))) {
         win32.OutputDebugStringA("StartServiceCtrlDispatcherA failed...");
     }
@@ -50,6 +51,7 @@ fn svc_main(
 ) callconv(@import("std").os.windows.WINAPI) void {
     win32.OutputDebugStringA("svc_main called...");
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-registerservicectrlhandlera
     svc_status_handle = win32.RegisterServiceCtrlHandlerA(SERVICE_NAME, svc_ctrl_handler);
 
     if (svc_status_handle == null) {
@@ -65,12 +67,13 @@ fn svc_main(
     svc_status.dwServiceSpecificExitCode = 0;
     svc_status.dwCheckPoint = 0;
 
-    // Check for false?? check msdn...
+    // https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-setservicestatus
     if (0 == win32.SetServiceStatus(svc_status_handle.?, &svc_status)) {
         win32.OutputDebugStringA("svc_main failed - SetServiceStatus failed ...");
         return;
     }
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createeventa
     svc_stop_event = win32.CreateEventA(null, 1, 0, null);
 
     if (svc_stop_event == null) {
@@ -81,6 +84,7 @@ fn svc_main(
         svc_status.dwWin32ExitCode = @intFromEnum(win32.GetLastError());
         svc_status.dwCheckPoint = 1;
 
+        // https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-setservicestatus
         if (0 == win32.SetServiceStatus(svc_status_handle.?, &svc_status)) {
             win32.OutputDebugStringA("svc_main failed - SetServiceStatus failed ...");
             return;
@@ -94,11 +98,13 @@ fn svc_main(
     svc_status.dwWin32ExitCode = 0;
     svc_status.dwCheckPoint = 0;
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-setservicestatus
     if (0 == win32.SetServiceStatus(svc_status_handle.?, &svc_status)) {
         win32.OutputDebugStringA("svc_main failed - SetServiceStatus failed ...");
         return;
     }
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createthread
     const thread: ?win32.HANDLE = win32.CreateThread(null, 0, svc_worker_thread, null, .{}, null);
 
     if (thread == null) {
@@ -116,6 +122,7 @@ fn svc_main(
     }
 
     if (svc_stop_event != null and svc_stop_event != win32.INVALID_HANDLE_VALUE) {
+        // https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
         _ = win32.CloseHandle(svc_stop_event.?);
     }
 
@@ -124,6 +131,7 @@ fn svc_main(
     svc_status.dwWin32ExitCode = 0;
     svc_status.dwCheckPoint = 3;
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-setservicestatus
     if (0 == win32.SetServiceStatus(svc_status_handle.?, &svc_status)) {
         win32.OutputDebugStringA("svc_main failed - SetServiceStatus failed ...");
         return;
@@ -145,11 +153,13 @@ fn svc_ctrl_handler(
             svc_status.dwCurrentState = win32.SERVICE_STOP_PENDING;
             svc_status.dwWin32ExitCode = 0;
 
+            // https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-setservicestatus
             if (0 == win32.SetServiceStatus(svc_status_handle.?, &svc_status)) {
                 win32.OutputDebugStringA("svc_ctrl_handler failed - SetServiceStatus failed ...");
                 return;
             }
 
+            // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-setevent
             if (0 == win32.SetEvent(svc_stop_event.?)) {
                 win32.OutputDebugStringA("svc_ctrl_handler failed - SetEvent failed ...");
                 return;
@@ -162,6 +172,7 @@ fn svc_ctrl_handler(
 fn svc_worker_thread(
     _: ?windows.LPVOID,
 ) callconv(@import("std").os.windows.WINAPI) windows.DWORD {
+    // https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject
     while (win32.WaitForSingleObject(svc_stop_event.?, 0) != @intFromEnum(win32.WAIT_OBJECT_0)) {
         win32.OutputDebugStringA("svc_worker_thread running...");
         win32.Sleep(3000);
