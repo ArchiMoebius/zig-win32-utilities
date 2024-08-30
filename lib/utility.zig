@@ -14,6 +14,7 @@ const Error = error{
 const std = @import("std");
 const win32 = @import("win32").everything;
 const win32_security = @import("win32").security;
+const windows = std.os.windows;
 
 // This exists until zigwin32 is updated to enable bitmasks for DesiredAccess /-:
 extern "advapi32" fn OpenProcessToken(
@@ -223,4 +224,43 @@ pub fn getProcessOwnerSID(allocator: std.mem.Allocator, hToken: ?win32.HANDLE) !
     // }
 
     return &u64ppSid;
+}
+
+pub fn InstallService(
+    lpServiceName: ?[*:0]const u8,
+    lpDisplayName: ?[*:0]const u8,
+    lpBinaryPathName: ?[*:0]const u8,
+) void {
+    // Get a handle to the SCM database.
+    const schSCManager: ?win32.SC_HANDLE = win32.OpenSCManager(null, // local computer
+        null, // ServicesActive database
+        win32.SC_MANAGER_ALL_ACCESS); // full access rights
+
+    if (schSCManager == null) {
+        std.log.err("OpenSCManager failed {d}\n", .{@intFromEnum(win32.GetLastError())});
+        return;
+    }
+
+    defer _ = win32.CloseServiceHandle(schSCManager.?);
+
+    const schService: ?win32.SC_HANDLE = win32.CreateServiceA(schSCManager.?, // SCM database
+        lpServiceName, // name of service
+        lpDisplayName, // service name to display
+        win32.SERVICE_ALL_ACCESS, // desired access
+        win32.SERVICE_WIN32_OWN_PROCESS, // service type
+        win32.SERVICE_DEMAND_START, // start type
+        win32.SERVICE_ERROR_NORMAL, // error control type
+        lpBinaryPathName, // path to service's binary
+        null, // no load ordering group
+        null, // no tag identifier
+        null, // no dependencies
+        null, // LocalSystem account
+        null); // no password
+
+    if (schService == null) {
+        std.log.err("OpenSCManager failed {d}\n", .{@intFromEnum(win32.GetLastError())});
+        return;
+    }
+
+    defer _ = win32.CloseServiceHandle(schService);
 }
