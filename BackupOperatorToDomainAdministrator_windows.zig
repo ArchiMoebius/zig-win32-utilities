@@ -213,7 +213,7 @@ const Target = struct {
             const hive = std.fmt.allocPrintZ(self.allocator, "{s}", .{h}) catch undefined;
             defer self.allocator.free(hive);
 
-            std.log.debug("[+] Calling RegOpenKeyExA(HKLM, {s}, BACKUP|LINK, ALL_ACCESS, hKey)", .{hive});
+            std.log.debug("[+] Calling RegOpenKeyExA(HKLM, {s}, REG_OPTION_BACKUP_RESTORE | REG_OPTION_OPEN_LINK, KEY_READ, hKey)", .{hive});
             // https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regopenkeyexa
             result = win32.RegOpenKeyExA(
                 local_machine,
@@ -319,41 +319,61 @@ const Target = struct {
         }
 
         var dit = std.mem.tokenizeSequence(u8, line, "/");
-        var tmp: []const u8 = dit.next() orelse return;
+        const domain: []const u8 = dit.next() orelse return;
+        var username_start: usize = 0;
 
         if (hasDomain) {
-            self.domain = try self.allocator.alloc(u8, tmp.len);
-            std.mem.copyForwards(u8, self.domain, tmp);
-            tmp = dit.next() orelse return;
+            self.domain = try self.allocator.alloc(u8, domain.len);
+            std.mem.copyForwards(u8, self.domain, domain);
+            username_start = domain.len + 1;
         } else {
             self.domain = try self.allocator.alloc(u8, 1);
             self.domain[0] = '.'; //  If this parameter is ".", the function (LogonUserA) validates the account by using only the local account database.
         }
 
-        dit = std.mem.tokenizeSequence(u8, tmp, ":");
+        const username_end = std.mem.indexOf(u8, line, ":").?;
 
-        tmp = dit.next() orelse return;
-
-        if (tmp.len > 0) {
-            self.username = try self.allocator.alloc(u8, tmp.len);
-            std.mem.copyForwards(u8, self.username, tmp);
+        if (line.len < username_end) {
+            std.log.err("Bad format", .{});
+            self.source = try self.allocator.alloc(u8, line.len);
+            std.mem.copyForwards(u8, self.source.?, line);
+            return;
         }
 
-        tmp = dit.next() orelse return;
+        const username_len = username_end - username_start;
 
-        dit = std.mem.tokenizeSequence(u8, tmp, "@");
-        tmp = dit.next() orelse return;
-
-        if (tmp.len > 0) {
-            self.password = try self.allocator.alloc(u8, tmp.len);
-            std.mem.copyForwards(u8, self.password, tmp);
+        if (username_len > 0) {
+            self.username = try self.allocator.alloc(u8, username_len);
+            std.mem.copyForwards(u8, self.username, line[username_start..username_end]);
         }
 
-        tmp = dit.next() orelse return;
+        const password_end = std.mem.lastIndexOf(u8, line, "@").?;
 
-        if (tmp.len > 0) {
-            self.source = try self.allocator.alloc(u8, tmp.len);
-            std.mem.copyForwards(u8, self.source.?, tmp);
+        if (line.len < password_end + 1) {
+            std.log.err("Bad format", .{});
+            self.source = try self.allocator.alloc(u8, line.len);
+            std.mem.copyForwards(u8, self.source.?, line);
+            return;
+        }
+        const password = line[username_end + 1 .. password_end];
+
+        if (password.len > 0) {
+            self.password = try self.allocator.alloc(u8, password.len);
+            std.mem.copyForwards(u8, self.password, password);
+        }
+
+        if (line.len < password_end + 1) {
+            std.log.err("Bad format", .{});
+            self.source = try self.allocator.alloc(u8, line.len);
+            std.mem.copyForwards(u8, self.source.?, line);
+            return;
+        }
+
+        const source = line[password_end + 1 ..];
+
+        if (source.len > 0) {
+            self.source = try self.allocator.alloc(u8, source.len);
+            std.mem.copyForwards(u8, self.source.?, source);
         }
     }
 
