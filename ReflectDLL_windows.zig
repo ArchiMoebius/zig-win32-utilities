@@ -12,11 +12,6 @@ const windows = std.os.windows;
 const DLLEntry = (*const fn (win32.HINSTANCE, u32, ?windows.LPVOID) callconv(.C) win32.BOOL);
 const INVALID_FILESIZE: u32 = 0xFFFFFFFF;
 
-const BASE_RELOCATION_BLOCK = struct {
-    PageAddress: u32,
-    BlockSize: u32,
-};
-
 const BASE_RELOCATION_ENTRY = packed struct(u16) {
     Offset: u12,
     Type: u4,
@@ -165,15 +160,34 @@ const Action = struct {
 
         // allocate new memory space for the DLL. Try to allocate memory in the image's preferred base address, but don't stress if the memory is allocated elsewhere
         // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc
-        const dllBase = win32.VirtualAlloc(@ptrFromInt(DLLImageBase), DLLImageSize, win32.VIRTUAL_ALLOCATION_TYPE{ .RESERVE = 1, .COMMIT = 1 }, win32.PAGE_EXECUTE_READWRITE);
+        var dllBase = win32.VirtualAlloc(
+            @ptrFromInt(DLLImageBase),
+            DLLImageSize,
+            win32.VIRTUAL_ALLOCATION_TYPE{ .RESERVE = 1, .COMMIT = 1 },
+            win32.PAGE_READWRITE,
+        );
         if (dllBase == null) {
-            std.log.err("[-] Failed VirtualAlloc({d}) :: {d}", .{ DLLImageSize, @intFromEnum(win32.GetLastError()) });
-            return Error.UnknownError;
+            dllBase = win32.VirtualAlloc(
+                null,
+                DLLImageSize,
+                win32.VIRTUAL_ALLOCATION_TYPE{ .RESERVE = 1, .COMMIT = 1 },
+                win32.PAGE_READWRITE,
+            );
+
+            if (dllBase == null) {
+                std.log.err("[-] Failed VirtualAlloc({d}) :: {d}", .{ DLLImageSize, @intFromEnum(win32.GetLastError()) });
+                return Error.UnknownError;
+            }
         }
 
         const dllBaseAddr: usize = @intFromPtr(dllBase);
         // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfreeex
-        defer _ = win32.VirtualFreeEx(win32.GetCurrentProcess(), dllBase, 0, win32.MEM_RELEASE);
+        defer _ = win32.VirtualFreeEx(
+            win32.GetCurrentProcess(),
+            dllBase,
+            0,
+            win32.MEM_RELEASE,
+        );
 
         const dllBaseBytes: []u8 = @as([*]u8, @ptrCast(dllBase))[0..DLLImageSize];
 
@@ -186,7 +200,10 @@ const Action = struct {
         @memcpy(dllBaseBytes[0..NTHeader.OptionalHeader.SizeOfHeaders], rawBytes[0..NTHeader.OptionalHeader.SizeOfHeaders]);
 
         // copy over DLL image sections to the newly allocated space for the DLL
-        const sections: [*]win32.IMAGE_SECTION_HEADER = @ptrFromInt(dllBaseAddr + NTHeaderOffset + @offsetOf(win32.IMAGE_NT_HEADERS64, "OptionalHeader") + NTHeader.FileHeader.SizeOfOptionalHeader);
+        const sections: [*]win32.IMAGE_SECTION_HEADER = @ptrFromInt(dllBaseAddr +
+            NTHeaderOffset +
+            @offsetOf(win32.IMAGE_NT_HEADERS64, "OptionalHeader") +
+            NTHeader.FileHeader.SizeOfOptionalHeader);
         std.log.debug("section start :: 0x{x}", .{@intFromPtr(&sections)});
 
         var idx: u32 = 0;
@@ -200,38 +217,37 @@ const Action = struct {
         const relocations: win32.IMAGE_DATA_DIRECTORY = NTHeader.OptionalHeader.DataDirectory[@intFromEnum(win32.IMAGE_DIRECTORY_ENTRY_BASERELOC)];
         const relocationTable: usize = dllBaseAddr + relocations.VirtualAddress;
         std.log.debug("relocationTable: {x} ", .{relocationTable});
-        const hProcess = win32.GetCurrentProcess();
 
         var relocationsProcessed: usize = 0;
-        while (relocationsProcessed < relocations.Size) {
-            const relocationBlock: *BASE_RELOCATION_BLOCK = @ptrFromInt(relocationTable + relocationsProcessed);
-            relocationsProcessed += @sizeOf(BASE_RELOCATION_BLOCK);
-            const relocationsCount = (relocationBlock.BlockSize - @sizeOf(BASE_RELOCATION_BLOCK)) / @sizeOf(BASE_RELOCATION_ENTRY);
+        var relocationBlock: *align(1) win32.IMAGE_BASE_RELOCATION = @ptrFromInt(relocationTable + relocationsProcessed);
+        while (relocationBlock.VirtualAddress != 0) {
+            std.log.debug("[!] Process Relations :: {x} of {x}", .{ relocationBlock.VirtualAddress, relocationBlock.SizeOfBlock });
+            relocationsProcessed += relocationBlock.SizeOfBlock;
+            const relocationsCount = (relocationBlock.SizeOfBlock - @sizeOf(win32.IMAGE_BASE_RELOCATION)) / @sizeOf(BASE_RELOCATION_ENTRY);
             const relocationEntries: [*]BASE_RELOCATION_ENTRY = @ptrFromInt(relocationTable + relocationsProcessed);
 
-            std.log.debug("relocations: {x} // {x} // {x}", .{ relocationsCount, relocationsProcessed, relocations.Size });
+            std.log.debug("relocations: {x}", .{relocationsCount});
             idx = 0;
             while (idx < relocationsCount) : (idx += 1) {
-                relocationsProcessed += @sizeOf(BASE_RELOCATION_ENTRY);
-                std.log.debug("relocationEntries[{d}].Type :: {d}", .{ idx, relocationEntries[idx].Type });
+                // std.log.debug("relocationEntries[{d}].Type :: {d}", .{ idx, relocationEntries[idx].Type });
 
-                if (relocationEntries[idx].Type == 0) {
+                if (relocationEntries[idx].Type == win32.IMAGE_REL_BASED_ABSOLUTE) {
+                    std.log.debug("[!] Skipping relocation", .{});
                     continue;
                 }
 
-                const relocationRVA: u32 = relocationBlock.PageAddress + relocationEntries[idx].Offset;
-                var addressToPatch: usize = 0;
-                // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory
-                if (0 == win32.ReadProcessMemory(hProcess, @ptrFromInt(dllBaseAddr + relocationRVA), @ptrCast(&addressToPatch), @sizeOf(*u32), null)) {
-                    std.log.err("[-] Failed ReadProcessMemory({any}, {any}) :: {d}", .{ dllBaseAddr + relocationRVA, @sizeOf(*u32), @intFromEnum(win32.GetLastError()) });
-                    return Error.UnknownError;
+                if (relocationEntries[idx].Type != win32.IMAGE_REL_BASED_HIGHLOW and relocationEntries[idx].Type != win32.IMAGE_REL_BASED_DIR64) {
+                    std.log.debug("[!] Skipping relocation", .{});
+                    continue;
                 }
-                addressToPatch += deltaImageBase;
 
-                const rvaBytes: []u8 = @as([*]u8, @ptrFromInt(addressToPatch))[0..@sizeOf(*u32)];
-                @memcpy(dllBaseBytes[relocationRVA .. relocationRVA + @sizeOf(*u32)], rvaBytes);
+                const addressToPatch: *align(1) usize = @ptrFromInt(dllBaseAddr + relocationBlock.VirtualAddress + relocationEntries[idx].Offset);
+                addressToPatch.* += deltaImageBase;
             }
+            relocationBlock = @ptrFromInt(relocationTable + relocationsProcessed);
         }
+
+        std.log.debug("[+] Resolve AIT", .{});
 
         // resolve import address table
         const imports: win32.IMAGE_DATA_DIRECTORY = NTHeader.OptionalHeader.DataDirectory[@intFromEnum(win32.IMAGE_DIRECTORY_ENTRY_IMPORT)];
