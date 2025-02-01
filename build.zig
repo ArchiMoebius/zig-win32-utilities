@@ -40,6 +40,7 @@ pub fn build(b: *std.Build) !void {
         "SessionExec_windows.zig",
         "shellcode_windows.zig",
         "Shortcut_windows.zig",
+        "Wallpaper_windows.zig",
 
         "shellcode_linux.zig",
     };
