@@ -360,7 +360,7 @@ const Action = struct {
         if (std.mem.startsWith(u8, line, "tcp://")) {
             self.file_type = FILE_TYPE.TCP;
 
-            var iter = std.mem.split(u8, line[6..], ":");
+            var iter = std.mem.splitAny(u8, line[6..], ":");
             self.ip = try std.fmt.allocPrintZ(self.allocator, "{s}", .{iter.next().?});
             errdefer self.allocator.free(self.ip);
             self.port = std.fmt.parseInt(u16, iter.next().?, 10) catch 55555;

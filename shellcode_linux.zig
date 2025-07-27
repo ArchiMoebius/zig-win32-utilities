@@ -9,14 +9,14 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const code = try allocator.alloc(u8, std.mem.page_size);
-    var pcode = std.mem.alignInSlice(code, std.mem.page_size) orelse return;
+    const code = try allocator.alloc(u8, std.heap.pageSize());
+    var pcode = std.mem.alignInSlice(code, std.heap.pageSize()) orelse return;
 
     @memcpy(pcode, buf);
 
     const p = @as([*]const u8, @ptrCast(pcode));
 
-    if (0 != std.os.linux.mprotect(p, std.mem.page_size, 7)) { // RWX
+    if (0 != std.os.linux.mprotect(p, std.heap.pageSize(), 7)) { // RWX
         return;
     }
     const intFuncPtr: usize = @intFromPtr(&pcode[0]);

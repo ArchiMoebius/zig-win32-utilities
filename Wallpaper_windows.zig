@@ -59,7 +59,7 @@ const Action = struct {
         defer _ = win32.IUnknown.Release(@ptrCast(ppv));
 
         {
-            const wallpaper = try std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.source);
+            const wallpaper = try std.unicode.utf8ToUtf16LeAllocZ(self.allocator, self.source);
             defer self.allocator.free(wallpaper);
 
             // https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-idesktopwallpaper-setwallpaper

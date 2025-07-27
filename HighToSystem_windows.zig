@@ -111,7 +111,7 @@ const Action = struct {
         var processInformation: win32.PROCESS_INFORMATION = std.mem.zeroes(win32.PROCESS_INFORMATION);
 
         startupInfo.cb = @sizeOf(win32.STARTUPINFOW);
-        startupInfo.lpDesktop = std.unicode.utf8ToUtf16LeWithNull(self.allocator, "winsta0\\default") catch undefined;
+        startupInfo.lpDesktop = std.unicode.utf8ToUtf16LeAllocZ(self.allocator, "winsta0\\default") catch undefined;
         errdefer self.allocator.free(startupInfo.lpDesktop);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
@@ -164,7 +164,7 @@ const Action = struct {
         // https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-duplicatetokenex
         if (0 == win32.DuplicateTokenEx(
             self.targetProcessToken,
-            win32_security.TOKEN_MAXIMUM_ALLOWED,
+            win32_security.TOKEN_ALL_ACCESS,
             &lpAttributes,
             win32.SecurityImpersonation,
             win32.TokenPrimary,
@@ -181,7 +181,7 @@ const Action = struct {
             return false;
         }
 
-        const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.command) catch undefined;
+        const lpApplicationName = std.unicode.utf8ToUtf16LeAllocZ(self.allocator, self.command) catch undefined;
         errdefer self.allocator.free(lpApplicationName);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw

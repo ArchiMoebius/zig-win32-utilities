@@ -69,7 +69,7 @@ const Action = struct {
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         if (0 == OpenProcessToken(
             hProcess.?,
-            win32_security.TOKEN_MAXIMUM_ALLOWED,
+            win32_security.TOKEN_ALL_ACCESS,
             &sourceProcessToken,
         )) {
             std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
@@ -256,7 +256,7 @@ const Action = struct {
 
         std.log.info("[+] Gained Trusted Installer", .{});
 
-        const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.command) catch undefined;
+        const lpApplicationName = std.unicode.utf8ToUtf16LeAllocZ(self.allocator, self.command) catch undefined;
         errdefer self.allocator.free(lpApplicationName);
 
         // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createprocesswithtokenw

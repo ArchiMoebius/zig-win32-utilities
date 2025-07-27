@@ -129,7 +129,7 @@ const Target = struct {
 
         var token: ?win32.HANDLE = self.token;
 
-        if (token == undefined or token.? == win32.INVALID_HANDLE_VALUE) {
+        if (token == null or token.? == win32.INVALID_HANDLE_VALUE) {
             // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentprocess
             const hProcess: ?win32.HANDLE = win32.GetCurrentProcess();
             const ap: u32 = @bitCast(win32_security.TOKEN_ADJUST_PRIVILEGES);

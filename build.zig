@@ -1,14 +1,14 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const targets: []const std.zig.CrossTarget = &.{
+const targets: []const std.Target.Query = &.{
     .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .gnu },
     .{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .msvc },
     .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu },
     .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl },
 };
 
-pub fn package(b: *std.Build, exe: *std.Build.Step.Compile, t: std.zig.CrossTarget) !void {
+pub fn package(b: *std.Build, exe: *std.Build.Step.Compile, t: std.Target.Query) !void {
     const target_output = b.addInstallArtifact(exe, .{
         .dest_dir = .{
             .override = .{
@@ -132,5 +132,25 @@ pub fn build(b: *std.Build) !void {
 
             allocator.free(file.?);
         }
+    }
+}
+
+comptime {
+    const required_zig = "0.14.1";
+    const current_zig = builtin.zig_version;
+    const min_zig = std.SemanticVersion.parse(required_zig) catch unreachable;
+    if (current_zig.order(min_zig) == .lt) {
+        const error_message =
+            \\Sorry, it looks like your version of zig is too old. :-(
+            \\
+            \\(Insert your program name here) requires development build {}
+            \\
+            \\Please download a development ("master") build from
+            \\
+            \\https://ziglang.org/download/
+            \\
+            \\
+        ;
+        @compileError(std.fmt.comptimePrint(error_message, .{min_zig}));
     }
 }

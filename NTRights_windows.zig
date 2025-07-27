@@ -120,7 +120,7 @@ const Action = struct {
 
     // https://msdn.microsoft.com/en-us/library/windows/desktop/ms722492(v=vs.85).aspx
     fn UnicodeStringFromString(self: *Self, s: []u8) !win32.UNICODE_STRING {
-        const utf16 = try std.unicode.utf8ToUtf16LeWithNull(self.allocator, s);
+        const utf16 = try std.unicode.utf8ToUtf16LeAllocZ(self.allocator, s);
         errdefer self.allocator.free(utf16);
 
         if (utf16.len > 0x7ffe) {

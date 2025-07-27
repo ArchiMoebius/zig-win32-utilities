@@ -170,7 +170,7 @@ const Action = struct {
         const commandLine = try std.fmt.allocPrintZ(self.allocator, "{s} -Command \"{s}\"", .{ powershell, self.command });
         defer self.allocator.free(commandLine);
 
-        const lpCommandLine = std.unicode.utf8ToUtf16LeWithNull(self.allocator, commandLine) catch undefined;
+        const lpCommandLine = std.unicode.utf8ToUtf16LeAllocZ(self.allocator, commandLine) catch undefined;
         errdefer self.allocator.free(lpCommandLine);
 
         if (0 == win32.ImpersonateLoggedOnUser(phToken)) {

@@ -65,7 +65,7 @@ const Action = struct {
         defer _ = win32.IUnknown.Release(@ptrCast(ppv));
 
         {
-            const pszDir = try std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.workingDirectory);
+            const pszDir = try std.unicode.utf8ToUtf16LeAllocZ(self.allocator, self.workingDirectory);
             defer self.allocator.free(pszDir);
 
             // https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinka-setworkingdirectory
@@ -79,7 +79,7 @@ const Action = struct {
         }
 
         {
-            const pszFile = try std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.source);
+            const pszFile = try std.unicode.utf8ToUtf16LeAllocZ(self.allocator, self.source);
             defer self.allocator.free(pszFile);
 
             // https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinka-setpath
@@ -94,7 +94,7 @@ const Action = struct {
 
         if (self.arguments.len > 0) {
             {
-                const pszArgs = try std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.arguments);
+                const pszArgs = try std.unicode.utf8ToUtf16LeAllocZ(self.allocator, self.arguments);
                 defer self.allocator.free(pszArgs);
 
                 // https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinka-setpath
@@ -127,7 +127,7 @@ const Action = struct {
         defer _ = win32.IUnknown.Release(@ptrCast(ppvObject));
 
         {
-            const destination = try std.unicode.utf8ToUtf16LeWithNull(self.allocator, self.destination);
+            const destination = try std.unicode.utf8ToUtf16LeAllocZ(self.allocator, self.destination);
             defer self.allocator.free(destination);
 
             // https://learn.microsoft.com/en-us/windows/win32/api/objidl/nf-objidl-ipersistfile-save

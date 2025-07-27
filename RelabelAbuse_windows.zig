@@ -324,7 +324,7 @@ const Action = struct {
         }
 
         const cmd = "C:\\windows\\system32\\cmd.exe";
-        const lpApplicationName = std.unicode.utf8ToUtf16LeWithNull(self.allocator, cmd) catch undefined;
+        const lpApplicationName = std.unicode.utf8ToUtf16LeAllocZ(self.allocator, cmd) catch undefined;
         errdefer self.allocator.free(lpApplicationName);
 
         const dwCreationFlags = win32.PROCESS_CREATION_FLAGS{

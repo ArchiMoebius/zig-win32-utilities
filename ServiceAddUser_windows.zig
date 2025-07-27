@@ -187,15 +187,15 @@ fn exec() i32 {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    const pszUsername = std.unicode.utf8ToUtf16LeWithNull(allocator, "username") catch {
+    const pszUsername = std.unicode.utf8ToUtf16LeAllocZ(allocator, "username") catch {
         return -1;
     };
     defer allocator.free(pszUsername);
-    const pszPassword = std.unicode.utf8ToUtf16LeWithNull(allocator, "password") catch {
+    const pszPassword = std.unicode.utf8ToUtf16LeAllocZ(allocator, "password") catch {
         return -2;
     };
     defer allocator.free(pszPassword);
-    const pszGroup = std.unicode.utf8ToUtf16LeWithNull(allocator, "Administrators") catch {
+    const pszGroup = std.unicode.utf8ToUtf16LeAllocZ(allocator, "Administrators") catch {
         return -3;
     };
     defer allocator.free(pszGroup);

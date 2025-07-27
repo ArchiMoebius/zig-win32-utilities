@@ -4,6 +4,8 @@ pub const default_level: std.Level = switch (std.builtin.mode) {
     .ReleaseSafe, .ReleaseFast, .ReleaseSmall => .info,
 };
 
+const SE_PRIVILEGE_DISABLED = win32.TOKEN_PRIVILEGES_ATTRIBUTES{};
+
 const std = @import("std");
 const win32 = @import("win32").everything;
 const win32_security = @import("win32").security;
@@ -92,7 +94,7 @@ const Action = struct {
             tp.Privileges[0].Attributes = win32.SE_PRIVILEGE_REMOVED;
         }
         if (!self.enable) {
-            tp.Privileges[0].Attributes = win32.SE_PRIVILEGE_DISABLED;
+            tp.Privileges[0].Attributes = SE_PRIVILEGE_DISABLED;
         }
 
         var idx: u32 = 0;
@@ -176,7 +178,7 @@ const Action = struct {
         // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
         if (0 == OpenProcessToken(
             self.hProcess.?,
-            win32_security.TOKEN_MAXIMUM_ALLOWED,
+            win32_security.TOKEN_ALL_ACCESS,
             &self.token,
         )) {
             std.log.err("[!] Failed OpenProcessToken :: error code ({d})", .{@intFromEnum(win32.GetLastError())});
