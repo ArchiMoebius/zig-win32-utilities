@@ -76,7 +76,7 @@ const Action = struct {
 
     pub fn debug(self: *Self) void {
         std.log.info(
-            "\nSet wallpaper :: {s} ==> {s}\n",
+            "\nSet wallpaper :: {s}\n",
             .{self.source},
         );
     }
